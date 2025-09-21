@@ -23,12 +23,11 @@ import traceback
 import numpy as np
 
 
-# REGISTER PENGURUS (AllowAny)
 class RegisterPengurusView(generics.CreateAPIView):
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [AllowAny]
-# REGISTER AKUN SANTRI
+
 class RegisterSantriView(generics.CreateAPIView):
     queryset = User.objects.all()
     serializer_class = RegisterSantriAccountSerializer
@@ -57,7 +56,6 @@ def api_get_user(request):
         "role": role
     })
 
-# SANTRI UPLOAD FOTO WAJAH
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def api_santri_upload_foto(request):
@@ -68,17 +66,14 @@ def api_santri_upload_foto(request):
         if not santri_id or not foto_file:
             return Response({"error": "santri_id dan foto wajib diisi"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # ambil santri
         try:
             santri = Santri.objects.get(id=santri_id)
         except Santri.DoesNotExist:
             return Response({"error": "Santri tidak ditemukan"}, status=status.HTTP_404_NOT_FOUND)
 
-        # simpan file foto dulu
         santri.foto = foto_file
         santri.save()
 
-        # 🔥 load file langsung dengan face_recognition (lebih aman daripada np.array(PIL.Image))
         img_path = santri.foto.path
         print("DEBUG >> proses file:", img_path)
 
