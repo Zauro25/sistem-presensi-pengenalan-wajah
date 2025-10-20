@@ -11,6 +11,7 @@ def decode_base64_image(data_url):
     data = base64.b64decode(encoded)
     return Image.open(BytesIO(data)).convert('RGB')
 
+
 def get_all_encodings():
     """Ambil semua face_encoding santri dari DB."""
     enc_dict = {}
@@ -22,25 +23,34 @@ def get_all_encodings():
             continue
     return enc_dict
 
-def recognize_from_image_pil(pil_image, tolerance=0.5):
-    """Cocokin wajah dari gambar PIL dengan database santri."""
-    img = np.array(pil_image)
 
-    # pastiin RGB
-    if img.ndim == 3 and img.shape[2] == 4:
-        img = img[:, :, :3]
-
-    face_locations = face_recognition.face_locations(img)
+def encode_face_from_image(pil_image):
+    """Ambil encoding & lokasi wajah pakai model HOG (lebih ringan)."""
+    img = np.array(pil_image.convert("RGB"))
+    face_locations = face_recognition.face_locations(img, model='hog')
     if not face_locations:
-        return None, "no_face"
+        return None, None
+    encs = face_recognition.face_encodings(img, face_locations)
+    if not encs:
+        return None, None
+    return encs[0].tolist(), face_locations[0]
+
+
+def recognize_from_image_pil(pil_image, tolerance=0.45):
+    """Cocokin wajah dengan database santri dan balikin lokasi wajah."""
+    img = np.array(pil_image.convert("RGB"))
+    face_locations = face_recognition.face_locations(img, model='hog')
+
+    if not face_locations:
+        return None, "no_face", None
 
     face_encodings = face_recognition.face_encodings(img, face_locations)
     if not face_encodings:
-        return None, "no_face"
+        return None, "no_face", None
 
     db_encs = get_all_encodings()
     if not db_encs:
-        return None, "no_dataset"
+        return None, "no_dataset", None
 
     face_enc = face_encodings[0]
     ids = list(db_encs.keys())
@@ -54,23 +64,7 @@ def recognize_from_image_pil(pil_image, tolerance=0.5):
         best_idx = min(matched_indices, key=lambda i: distances[i])
         santri_pk = ids[best_idx]
         santri = Santri.objects.get(pk=santri_pk)
-        return santri, float(distances[best_idx])
+        loc = face_locations[0]
+        return santri, float(distances[best_idx]), loc
     else:
-        return None, "no_match"
-    
-def prepare_image_for_face_recognition(path, max_size=1000, force_gray=False):
-    """
-    Baca gambar dari path, resize biar ga kegedean, convert ke RGB/grayscale,
-    lalu return numpy array uint8 C-contiguous siap untuk face_recognition.
-    """
-    pil_img = Image.open(path).convert("RGB")
-    pil_img.thumbnail((max_size, max_size))
-
-    if force_gray:
-        pil_img = pil_img.convert("L")  # 🔥 fallback grayscale
-
-    img_np = np.array(pil_img, dtype=np.uint8)
-    img_np = np.ascontiguousarray(img_np)
-
-    print("DEBUG final >>", pil_img.mode, img_np.dtype, img_np.shape, img_np.flags)
-    return img_np
+        return None, "no_match", None

@@ -1,133 +1,26 @@
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from django.contrib.auth import authenticate, login, logout
+from django.utils import timezone
 from .models import Santri, Absensi, SuratIzin
 from .serializers import SantriSerializer, AbsensiSerializer, SuratIzinSerializer, UserSerializer, RegisterSantriAccountSerializer
-from .face_utils import prepare_image_for_face_recognition
-from rest_framework import generics, status
-from django.utils import timezone
-from .face_utils import decode_base64_image, recognize_from_image_pil
+from .face_utils import decode_base64_image, recognize_from_image_pil, encode_face_from_image
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
+from rest_framework import generics, status
 from rest_framework.views import APIView
-from django.db import IntegrityError
+from django.core.cache import cache
 import datetime
 import pandas as pd
-import face_recognition
 from io import BytesIO
 from django.http import HttpResponse
 from reportlab.pdfgen import canvas
-from django.core.cache import cache
-import traceback
 import numpy as np
-
-
-class RegisterPengurusView(generics.CreateAPIView):
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
-    permission_classes = [AllowAny]
-
-class RegisterSantriView(generics.CreateAPIView):
-    queryset = User.objects.all()
-    serializer_class = RegisterSantriAccountSerializer
-    permission_classes = [AllowAny]
-
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
-        return Response({
-            "id": user.id,
-            "username": user.username,
-            "role": "santri"
-        })
-
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def api_get_user(request):
-    user = request.user
-    role = "pengurus" if user.is_staff else "santri"
-    return Response({
-        "id": user.id,
-        "username": user.username,
-        "is_staff": user.is_staff,
-        "is_superuser": user.is_superuser,
-        "role": role
-    })
-
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def api_santri_upload_foto(request):
-    try:
-        santri_id = request.data.get("santri_id")
-        foto_file = request.FILES.get("foto")
-
-        if not santri_id or not foto_file:
-            return Response({"error": "santri_id dan foto wajib diisi"}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            santri = Santri.objects.get(id=santri_id)
-        except Santri.DoesNotExist:
-            return Response({"error": "Santri tidak ditemukan"}, status=status.HTTP_404_NOT_FOUND)
-
-        santri.foto = foto_file
-        santri.save()
-
-        img_path = santri.foto.path
-        print("DEBUG >> proses file:", img_path)
-
-        img = face_recognition.load_image_file(img_path)
-        print("DEBUG >> dtype:", img.dtype, "shape:", img.shape, "C_CONTIGUOUS:", img.flags['C_CONTIGUOUS'])
-
-        encs = face_recognition.face_encodings(img)
-
-        if len(encs) == 0:
-            return Response({"error": "Wajah tidak terdeteksi, coba gunakan foto yang lebih jelas"}, status=status.HTTP_400_BAD_REQUEST)
-
-        # simpan encoding ke DB
-        santri.face_encoding = encs[0].tolist()
-        santri.save()
-
-        return Response({"success": True, "message": "Foto berhasil diupload & encoding disimpan"}, status=status.HTTP_200_OK)
-
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return Response({"error": f"Error proses wajah: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+import face_recognition
+from django.db import IntegrityError
 
 
 
-# LOGIN TOKEN-BASED (AllowAny)
-class LoginPengurusView(APIView):
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        username = request.data.get("username")
-        password = request.data.get("password")
-        user = authenticate(username=username, password=password)
-        if user is not None:
-            token, _ = Token.objects.get_or_create(user=user)
-
-            # cek apakah user ini punya profil santri
-            santri_name = None
-            role = "pengurus"
-            if hasattr(user, "santri_profile"):
-                santri_name = user.santri_profile.nama
-                role = "santri"
-
-            return Response({
-                "token": token.key,
-                "role": role,
-                "user": {
-                    "id": user.id,
-                    "username": user.username,
-                    "nama_lengkap": santri_name  # << ini nambahin nama lengkap kalau santri
-                }
-            })
-        return Response({"error": "Invalid Credentials"}, status=status.HTTP_401_UNAUTHORIZED)
-
-    
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def api_logout(request):
@@ -158,82 +51,26 @@ class StartTelatView(APIView):
 ABSENSI_KEY = "absensi_start_time"
 TELAT_KEY = "telat_start_time"
 
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def api_start_absensi(request):
-    tanggal = request.data.get("tanggal")
-    sesi = request.data.get("sesi")
-    if not tanggal or not sesi:
-        return Response({"ok": False, "message": "Lengkapi tanggal & sesi"})
-    cache.set(ABSENSI_KEY, {"tanggal": tanggal, "sesi": sesi, "time": timezone.now()}, 3600)
-    return Response({"ok": True, "message": "Absensi dimulai"})
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def api_start_telat(request):
-    telat_time = timezone.now()
-    cache.set(TELAT_KEY, telat_time, 3600)
-    return Response({"ok": True, "message": "Penghitungan keterlambatan dimulai"})
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def api_end_absensi(request):
-    cache.delete(ABSENSI_KEY)
-    cache.delete(TELAT_KEY)
-    return Response({"ok": True, "message": "Absensi selesai"})
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def api_recognize_and_attend(request):
-    data_url = request.data.get('image')
-    absensi_info = cache.get(ABSENSI_KEY)
-    telat_time = cache.get(TELAT_KEY)
-
-    if not absensi_info:
-        return Response({"ok": False, "message": "Absensi belum dimulai"}, status=400)
-
-    tanggal = absensi_info['tanggal']
-    sesi = absensi_info['sesi']
-
-    pil_img = decode_base64_image(data_url)
-    santri, info = recognize_from_image_pil(pil_img, tolerance=0.5)
-    if not santri:
-        return Response({"ok": False, "message": "Wajah tidak cocok"}, status=404)
-
-    # 🔥 Status default
-    status_absensi = "Hadir"
-
-    # 🔥 Kalau tombol "mulai telat" sudah ditekan, baru hitung T1/T2/T3
-    if telat_time:
-        diff = (timezone.now() - telat_time).total_seconds() / 60
-        if diff <= 5:
-            status_absensi = "T1"
-        elif diff <= 15:
-            status_absensi = "T2"
-        else:
-            status_absensi = "T3"
-
-    Absensi.objects.update_or_create(
-        santri=santri,
-        tanggal=tanggal,
-        sesi=sesi,
-        defaults={"status": status_absensi, "created_by": request.user}
-    )
-
-    return Response({
-        "ok": True,
-        "santri": santri.nama,
-        "status": status_absensi
-    })
-
-
-
 # LIST SANTRI
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_list_santri(request):
     santris = Santri.objects.all().order_by('santri_id')
     return Response({'ok': True, 'data': SantriSerializer(santris, many=True).data})
+
+#GET USER
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def api_get_user(request):
+    user = request.user
+    role = "pengurus" if user.is_staff else "santri"
+    return Response({
+        "id": user.id,
+        "username": user.username,
+        "is_staff": user.is_staff,
+        "is_superuser": user.is_superuser,
+        "role": role
+    })
 
 # UPLOAD SURAT IZIN (santri or pengurus) — santri can upload, auto approved
 @api_view(['POST'])
@@ -257,9 +94,241 @@ def api_upload_surat_izin(request):
         return Response({'ok': False, 'message': 'Sudah ada surat izin untuk santri ini pada tanggal & sesi tersebut'}, status=400)
     return Response({'ok': True, 'surat': SuratIzinSerializer(si).data})
 
-# RECOGNIZE & ATTEND (pengurus only) — expects image (base64), tanggal, sesi
+# ======================================================
+# REGISTER AKUN PENGURUS & SANTRI
+# ======================================================
 
-# REKAP pivot (range) — returns JSON pivot and also we have export endpoints
+class RegisterPengurusView(generics.CreateAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    permission_classes = [AllowAny]
+
+
+class RegisterSantriView(generics.CreateAPIView):
+    queryset = User.objects.all()
+    serializer_class = RegisterSantriAccountSerializer
+    permission_classes = [AllowAny]
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        return Response({"id": user.id, "username": user.username, "role": "santri"})
+
+
+# ======================================================
+# LOGIN
+# ======================================================
+class LoginPengurusView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        from django.contrib.auth import authenticate
+        username = request.data.get("username")
+        password = request.data.get("password")
+        user = authenticate(username=username, password=password)
+        if not user:
+            return Response({"error": "Invalid Credentials"}, status=401)
+
+        token, _ = Token.objects.get_or_create(user=user)
+        role = "pengurus" if user.is_staff else "santri"
+        santri_name = getattr(user, "santri_profile", None)
+        return Response({
+            "token": token.key,
+            "role": role,
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "nama_lengkap": santri_name.nama if santri_name else None
+            }
+        })
+
+
+# ======================================================
+# SANTRI UPLOAD / REGISTRASI WAJAH
+# ======================================================
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def api_santri_registrasi_wajah(request):
+    try:
+        santri_id = request.data.get("santri_id")
+        image_data = request.data.get("image")
+
+        # ✅ Validasi awal
+        if not santri_id or not image_data:
+            return Response(
+                {"error": "santri_id dan image wajib diisi"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        print(f"DEBUG >> registrasi wajah santri_id={santri_id}")
+
+        try:
+            santri = Santri.objects.get(id=santri_id)
+        except Santri.DoesNotExist:
+            return Response(
+                {"error": f"Santri dengan id {santri_id} tidak ditemukan"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # ✅ Decode base64 ke PIL image
+        pil_img = decode_base64_image(image_data)
+        img = np.array(pil_img)
+
+        # ✅ Deteksi wajah pakai HOG (efisien di Supabase karena non-GPU)
+        face_locations = face_recognition.face_locations(img, model="hog")
+        if not face_locations:
+            return Response({"error": "Wajah tidak ditemukan"}, status=400)
+
+        face_encodings = face_recognition.face_encodings(img, face_locations)
+
+        if not face_encodings:
+            return Response({"error": "Encoding wajah gagal"}, status=400)
+
+        santri.face_encoding = face_encodings[0].tolist()
+        santri.save()
+
+        # Ambil lokasi wajah pertama
+        top, right, bottom, left = face_locations[0]
+
+        return Response({
+            "ok": True,
+            "message": f"Wajah {santri.nama} berhasil diregistrasi!",
+            "nama": santri.nama,
+            "sektor": santri.sektor,
+            "location": {"top": top, "right": right, "bottom": bottom, "left": left}
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print("Error registrasi wajah:", str(e))
+        return Response({"error": str(e)}, status=500)
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def api_santri_upload_foto(request):
+    try:
+        santri_id = request.data.get("santri_id")
+        foto_file = request.FILES.get("foto")
+
+        if not santri_id or not foto_file:
+            return Response({"error": "santri_id dan foto wajib diisi"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # ambil santri
+        try:
+            santri = Santri.objects.get(id=santri_id)
+        except Santri.DoesNotExist:
+            return Response({"error": "Santri tidak ditemukan"}, status=status.HTTP_404_NOT_FOUND)
+
+        # simpan file foto dulu
+        santri.foto = foto_file
+        santri.save()
+
+        # 🔥 load file langsung dengan face_recognition (lebih aman daripada np.array(PIL.Image))
+        img_path = santri.foto.path
+        print("DEBUG >> proses file:", img_path)
+
+        img = face_recognition.load_image_file(img_path)
+        print("DEBUG >> dtype:", img.dtype, "shape:", img.shape, "C_CONTIGUOUS:", img.flags['C_CONTIGUOUS'])
+
+        encs = face_recognition.face_encodings(img)
+
+        if len(encs) == 0:
+            return Response({"error": "Wajah tidak terdeteksi, coba gunakan foto yang lebih jelas"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # simpan encoding ke DB
+        santri.face_encoding = encs[0].tolist()
+        santri.save()
+
+        return Response({"success": True, "message": "Foto berhasil diupload & encoding disimpan"}, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response({"error": f"Error proses wajah: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+# ======================================================
+# ABSENSI PENGURUS VIA KAMERA
+# ======================================================
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def api_start_absensi(request):
+    tanggal = request.data.get("tanggal")
+    sesi = request.data.get("sesi")
+    if not tanggal or not sesi:
+        return Response({"ok": False, "message": "Lengkapi tanggal & sesi"})
+    cache.set(ABSENSI_KEY, {"tanggal": tanggal, "sesi": sesi, "time": timezone.now()}, 3600)
+    return Response({"ok": True, "message": "Absensi dimulai"})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def api_start_telat(request):
+    telat_time = timezone.now()
+    cache.set(TELAT_KEY, telat_time, 3600)
+    return Response({"ok": True, "message": "Hitung keterlambatan dimulai"})
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def api_end_absensi(request):
+    cache.delete(ABSENSI_KEY)
+    cache.delete(TELAT_KEY)
+    return Response({"ok": True, "message": "Absensi selesai"})
+
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def api_recognize_and_attend(request):
+    data_url = request.data.get('image')
+    absensi_info = cache.get(ABSENSI_KEY)
+    telat_time = cache.get(TELAT_KEY)
+
+    if not absensi_info:
+        return Response({"ok": False, "message": "Absensi belum dimulai"}, status=400)
+
+    tanggal = absensi_info['tanggal']
+    sesi = absensi_info['sesi']
+
+    pil_img = decode_base64_image(data_url)
+    santri, info, location = recognize_from_image_pil(pil_img, tolerance=0.45)
+    if not santri:
+        return Response({"ok": False, "message": "Wajah tidak cocok"}, status=404)
+
+    status_absensi = "Hadir"
+    if telat_time:
+        diff = (timezone.now() - telat_time).total_seconds() / 60
+        if diff <= 5:
+            status_absensi = "T1"
+        elif diff <= 15:
+            status_absensi = "T2"
+        else:
+            status_absensi = "T3"
+
+    Absensi.objects.update_or_create(
+        santri=santri,
+        tanggal=tanggal,
+        sesi=sesi,
+        defaults={"status": status_absensi, "created_by": request.user}
+    )
+
+    return Response({
+        "ok": True,
+        "santri": {
+            "id": santri.id,
+            "nama": santri.nama
+        },
+        "status": status_absensi,
+        "location": {
+            "top": location[0],
+            "right": location[1],
+            "bottom": location[2],
+            "left": location[3]
+        }
+    })
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_rekap(request):

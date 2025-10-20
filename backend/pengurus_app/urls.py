@@ -8,6 +8,7 @@ urlpatterns = [
     path('santri/', views.api_list_santri),
     path('santri/upload-foto/', views.api_santri_upload_foto, name="santri-upload-foto"),
     path('surat/upload/', views.api_upload_surat_izin),
+    path('santri/registrasi-wajah/', views.api_santri_registrasi_wajah, name="santri-registrasi-wajah"),
     path('recognize/', views.api_recognize_and_attend),
     path('rekap/', views.api_rekap),
     path('rekap/export/xlsx/', views.api_export_xlsx),

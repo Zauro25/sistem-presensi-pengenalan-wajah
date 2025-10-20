@@ -1,10 +1,6 @@
-# backend/pengurus_app/models.py
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
-from django.contrib.postgres.fields import ArrayField
-import uuid
-import json
 
 def santri_photo_upload_path(instance, filename):
     # auto rename file: SANTRI_<santri_id>_<timestamp>.jpg
@@ -22,7 +18,7 @@ class Santri(models.Model):
     sektor = models.CharField(max_length=20, choices=SEKTOR_CHOICES, blank=True, null=True)
     angkatan = models.CharField(max_length=50, blank=True, null=True)
     jenis_kelamin = models.CharField(max_length=1, choices=JENIS_CHOICES, default='L')
-    foto = models.ImageField(upload_to=santri_photo_upload_path, null=True, blank=True)
+    foto = models.ImageField(upload_to='santri_photos/', null=True, blank=True)
     face_encoding = models.JSONField(null=True, blank=True)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="santri_profile", null=True, blank=True)
 
@@ -39,13 +35,15 @@ class Absensi(models.Model):
     sesi = models.CharField(max_length=10, choices=SESI_CHOICES)
     waktu_scan = models.DateTimeField(default=timezone.now)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES)
-    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)  # pengurus yang mencatat
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
 
     class Meta:
-        unique_together = ('santri', 'tanggal', 'sesi')  # satu santri satu kali per sesi
+        unique_together = ('santri', 'tanggal', 'sesi')
 
     def __str__(self):
         return f"{self.santri} - {self.tanggal} {self.sesi} - {self.status}"
+
+
 class SuratIzin(models.Model):
     SESI_CHOICES = [('Subuh','Subuh'), ('Sore','Sore'), ('Malam','Malam')]
     santri = models.ForeignKey(Santri, on_delete=models.CASCADE)
@@ -54,7 +52,7 @@ class SuratIzin(models.Model):
     file = models.FileField(upload_to='surat_izin/')
     uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     uploaded_at = models.DateTimeField(default=timezone.now)
-    status = models.CharField(max_length=20, default='Disetujui')  # langsung sah
+    status = models.CharField(max_length=20, default='Disetujui')
     note = models.TextField(blank=True, null=True)
 
     class Meta:
