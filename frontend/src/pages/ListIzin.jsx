@@ -36,8 +36,10 @@ export default function ListIzin() {
   }
 
   return (
-    <div className="container">
-      <h3>Upload Surat Izin</h3>
+    <div className="min-h-screen flex flex-col items-center justify-start py-10 bg-gray-800">
+      <div className="bg-gray-300 rounded-3xl shadow-lg p-6 w-full max-w-6xl flex flex-col items-center">
+      <div className="container">
+      <h3 className="text-gray font-semibold">Upload Surat Izin</h3>
       <form onSubmit={upload}>
         <select className="form-select mb-2" onChange={e=>setSantriPk(e.target.value)} value={santriPk}>
           <option value="">Pilih santri</option>
@@ -49,8 +51,8 @@ export default function ListIzin() {
           <option>Sore</option>
           <option>Malam</option>
         </select>
-        <input type="file" className="form-control mb-2" accept=".pdf,image/*" onChange={e=>setFile(e.target.files[0])} />
-        <button className="btn btn-primary">Upload Surat Izin</button>
+        <input type="file" className="form-control mb-2 " accept=".pdf,image/*" onChange={e=>setFile(e.target.files[0])} />
+        <button className="btn btn-primary"><strong>Upload Surat Izin</strong></button>
       </form>
 
       <hr/>
@@ -69,6 +71,8 @@ export default function ListIzin() {
           ))}
         </tbody>
       </table>
+    </div>
+    </div>
     </div>
   );
 }

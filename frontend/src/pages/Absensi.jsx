@@ -62,27 +62,26 @@ export default function Absensi() {
         status: res.status,
       });
     }
-    return res; // biar CameraCapture bisa render bounding box-nya
+    return res; 
   };
 
   const goBack = () => window.history.back();
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-800">
-      <div className="bg-gray-300 rounded-3xl shadow-lg p-6 w-[95%] max-w-6xl flex flex-col items-center">
-        <div className="flex w-full gap-6">
-          {/* Kolom kiri: tanggal + sesi */}
-          <div className="flex flex-col gap-4 mr-6">
+    <div className="flex items-center justify-center min-h-screen bg-gray-800 px-4 py-6">
+      <div className="bg-gray-300 rounded-3xl shadow-lg p-6 w-full max-w-6xl flex flex-col items-center">
+        <div className="flex flex-col md:flex-row w-full gap-6 md:items-stretch">
+          <div className="flex flex-col gap-4 md:w-1/4 w-full">
             <input
               type="date"
               value={tanggal}
               onChange={(e) => setTanggal(e.target.value)}
-              className="px-4 py-3 rounded-lg border text-center font-bold text-white bg-gray-700"
+              className="px-4 py-3 rounded-lg border text-center font-bold text-white bg-gray-700 w-full"
             />
             <select
               value={sesi}
               onChange={(e) => setSesi(e.target.value)}
-              className="px-4 py-3 rounded-lg border text-center font-bold text-white bg-gray-700"
+              className="px-4 py-3 rounded-lg border text-center font-bold text-white bg-gray-700 w-full"
             >
               <option value="Subuh">Subuh</option>
               <option value="Sore">Sore</option>
@@ -91,14 +90,12 @@ export default function Absensi() {
           </div>
 
           {/* Kamera */}
-          <div className="flex-1 flex items-center justify-center text-white rounded-lg text-3xl font-bold">
-            {active && (
-              <CameraCapture onCapture={handleCapture} active={active} />
-            )}
+          <div className="flex-1 flex items-center justify-center text-white rounded-lg text-3xl font-bold w-full md:w-auto order-2 md:order-none">
+            {active && <CameraCapture onCapture={handleCapture} active={active} />}
           </div>
 
           {/* Kotak hasil kanan */}
-          <div className="bg-white p-6 rounded-lg w-64 h-[250px] flex items-center justify-center shadow">
+          <div className="bg-white p-6 rounded-lg md:w-64 w-full h-auto flex items-center justify-center shadow order-3 md:order-none">
             {result ? (
               <div className="text-center">
                 <h3 className="font-bold text-xl">{result.nama}</h3>
@@ -125,7 +122,7 @@ export default function Absensi() {
         </div>
 
         {/* Tombol bawah */}
-        <div className="flex gap-6 mt-6 flex-wrap">
+        <div className="flex flex-wrap gap-4 justify-center mt-6">
           <button
             onClick={startAbsensi}
             className="bg-green-700 text-white px-6 py-3 rounded-lg font-bold hover:bg-green-800 active:scale-95 transition-transform"

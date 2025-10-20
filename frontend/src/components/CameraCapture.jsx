@@ -21,7 +21,7 @@ export default function CameraCapture({ onCapture, active }) {
       loopDetect();
     } catch (e) {
       console.error(e);
-      alert("❌ Gagal mengakses kamera");
+      alert("Gagal mengakses kamera");
     }
   };
 
@@ -47,13 +47,15 @@ export default function CameraCapture({ onCapture, active }) {
     tempCanvas.width = video.videoWidth;
     tempCanvas.height = video.videoHeight;
     const tctx = tempCanvas.getContext("2d");
+    tctx.translate(video.videoWidth, 0);
+    tctx.scale(-1, 1);
     tctx.drawImage(video, 0, 0);
     const dataURL = tempCanvas.toDataURL("image/jpeg");
     const res = await onCapture(dataURL);
     return res;
   };
 
-  const drawBox = (res) => {
+ const drawBox = (res) => {
     const canvas = canvasRef.current;
     const video = videoRef.current;
     if (!canvas || !res?.location || !video) return;
@@ -61,7 +63,6 @@ export default function CameraCapture({ onCapture, active }) {
     const ctx = canvas.getContext("2d");
     const { top, right, bottom, left } = res.location;
 
-    // Scaling biar bounding box pas di wajah
     const videoWidth = video.videoWidth;
     const videoHeight = video.videoHeight;
     const displayWidth = video.clientWidth;
@@ -70,10 +71,11 @@ export default function CameraCapture({ onCapture, active }) {
     const scaleX = displayWidth / videoWidth;
     const scaleY = displayHeight / videoHeight;
 
-    const scaledLeft = left * scaleX;
+    // karena tampilan di-flip, posisi X harus dikoreksi
+    const flippedLeft = displayWidth - right * scaleX;
+    const boxWidth = (right - left) * scaleX;
+    const boxHeight = (bottom - top) * scaleY;
     const scaledTop = top * scaleY;
-    const scaledWidth = (right - left) * scaleX;
-    const scaledHeight = (bottom - top) * scaleY;
 
     canvas.width = displayWidth;
     canvas.height = displayHeight;
@@ -81,7 +83,7 @@ export default function CameraCapture({ onCapture, active }) {
 
     ctx.strokeStyle = "lime";
     ctx.lineWidth = 3;
-    ctx.strokeRect(scaledLeft, scaledTop, scaledWidth, scaledHeight);
+    ctx.strokeRect(flippedLeft, scaledTop, boxWidth, boxHeight);
 
     const label =
       res.santri?.nama && res.status
@@ -90,7 +92,7 @@ export default function CameraCapture({ onCapture, active }) {
 
     ctx.fillStyle = "lime";
     ctx.font = "16px Arial";
-    ctx.fillText(label, scaledLeft + 4, scaledTop - 10);
+    ctx.fillText(label, flippedLeft + 4, scaledTop - 10);
   };
 
   return (
