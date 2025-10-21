@@ -11,4 +11,4 @@ class AbsensiAdmin(admin.ModelAdmin):
 
 @admin.register(SuratIzin)
 class SuratIzinAdmin(admin.ModelAdmin):
-    list_display = ('santri','uploaded_at','status')
+    list_display = ('santri','alasan','status')

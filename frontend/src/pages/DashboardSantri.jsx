@@ -44,7 +44,7 @@ export default function DashboardSantri() {
             <div className="w-16 h-16 mb-3 bg-white rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-150">
               <img src={izinIcon} alt="upload izin" className="w-10 h-10" />
             </div>
-            <span className="font-black text-xl tracking-wider">Upload Surat Izin</span>
+            <span className="font-black text-xl tracking-wider">Perizinan</span>
           </button>
 
         </div>

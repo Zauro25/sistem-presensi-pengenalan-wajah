@@ -6,12 +6,13 @@ export default function ListIzin() {
   const [santris, setSantris] = useState([]);
   const [file, setFile] = useState(null);
   const [santriPk, setSantriPk] = useState("");
+  const [listSantris, setListSantris] = useState([]);
   const [tanggal, setTanggal] = useState("");
   const [sesi, setSesi] = useState("Subuh");
 
   useEffect(()=>{ fetchAll(); },[]);
   async function fetchAll(){
-    const r = await fetch(`${process.env.REACT_APP_API_BASE || 'http://localhost:8000/api'}/surat/`, { headers: {} }).then(r=>r.json());
+    const r = await fetch(`${process.env.REACT_APP_API_BASE || 'http://127.0.0.1:8000/api'}/surat/`, { headers: {} }).then(r=>r.json());
     if(r.ok) setItems(r.data);
     const s = await fetchSantriApi();
     if(s.ok) setSantris(s.data);
@@ -19,12 +20,12 @@ export default function ListIzin() {
 
   async function upload(e){
     e.preventDefault();
-    if(!santriPk || !file || !tanggal || !sesi){
+    if(!listSantri || !file || !tanggal || !sesi){
       alert("Lengkapi data");
       return;
     }
     const fd = new FormData();
-    fd.append('santri_pk', santriPk);
+    fd.append('nama_santri', listSantris.find(s=>s.id.toString()===santriPk)?.nama || '');
     fd.append('tanggal', tanggal);
     fd.append('sesi', sesi);
     fd.append('file', file);
@@ -41,22 +42,23 @@ export default function ListIzin() {
       <div className="container">
       <h3 className="text-gray font-semibold">Upload Surat Izin</h3>
       <form onSubmit={upload}>
-        <select className="form-select mb-2" onChange={e=>setSantriPk(e.target.value)} value={santriPk}>
+        <select className="form-select mb-2" onChange={e=>setListSantris(e.target.value)} value={listSantri}>
           <option value="">Pilih santri</option>
           {santris.map(s=> <option key={s.id} value={s.id}>{s.santri_id} - {s.nama}</option>)}
         </select>
         <input type="date" className="form-control mb-2" value={tanggal} onChange={e=>setTanggal(e.target.value)} />
         <select className="form-select mb-2" value={sesi} onChange={e=>setSesi(e.target.value)}>
-          <option>Subuh</option>
-          <option>Sore</option>
-          <option>Malam</option>
+          <option>Sesi Subuh</option>
+          <option>Sesi Sore</option>
+          <option>Sesi Malam</option>
         </select>
+         <input className="form-control mb-2" placeholder="Alasan" />
         <input type="file" className="form-control mb-2 " accept=".pdf,image/*" onChange={e=>setFile(e.target.files[0])} />
         <button className="btn btn-primary"><strong>Upload Surat Izin</strong></button>
       </form>
 
       <hr/>
-      <h5>Daftar Surat (Terakhir)</h5>
+      <h5>Riwayat Perizinan</h5>
       <table className="table">
         <thead><tr><th>Santri</th><th>Tanggal</th><th>Sesi</th><th>File</th><th>Status</th></tr></thead>
         <tbody>

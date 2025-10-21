@@ -103,6 +103,7 @@ export default function CameraCapture({ onCapture, active }) {
           width: "100%",
           maxWidth: "480px",
           borderRadius: "10px",
+          transform: "scaleX(-1)"
         }}
       />
       <canvas

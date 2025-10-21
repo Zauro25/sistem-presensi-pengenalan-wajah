@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 // import icon dari src/assets
 import absensiIcon from "../assets/absensi.png";
 import rekapIcon from "../assets/rekap.png";
+import izinIcon from "../assets/perizinan.png"
 
 export default function Dashboard() {
   const [santris, setSantris] = useState([]);
@@ -60,6 +61,15 @@ export default function Dashboard() {
               <img src={rekapIcon} alt="rekap" className="w-10 h-10" />
             </div>
             <span className="font-black text-xl tracking-wider">REKAP</span>
+          </button>
+                    <button
+            onClick={() => navigate("/rekap")}
+            className="flex flex-col items-center justify-center bg-green-600 text-white rounded-2xl w-full sm:w-48 h-48 hover:bg-green-700 active:bg-green-800 active:scale-95 transition-all duration-150 shadow-lg group"
+          >
+            <div className="w-16 h-16 mb-3 bg-white rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-150">
+              <img src={izinIcon} alt="perizinan" className="w-10 h-10" />
+            </div>
+            <span className="font-black text-xl tracking-wider">Perizinan</span>
           </button>
         </div>
         

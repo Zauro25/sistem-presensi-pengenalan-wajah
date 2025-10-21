@@ -31,6 +31,7 @@ class Absensi(models.Model):
     STATUS_CHOICES = [('Hadir','Hadir'),('T1','T1'),('T2','T2'),('T3','T3')]
 
     santri = models.ForeignKey(Santri, on_delete=models.CASCADE)
+    kelas = models.CharField(max_length=50, blank=True, null=True)
     tanggal = models.DateField()
     sesi = models.CharField(max_length=10, choices=SESI_CHOICES)
     waktu_scan = models.DateTimeField(default=timezone.now)
@@ -38,25 +39,24 @@ class Absensi(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
 
     class Meta:
-        unique_together = ('santri', 'tanggal', 'sesi')
+        unique_together = ('santri', 'kelas', 'tanggal', 'sesi')
 
     def __str__(self):
-        return f"{self.santri} - {self.tanggal} {self.sesi} - {self.status}"
+        return f"{self.santri} - {self.kelas} {self.tanggal} {self.sesi} - {self.status}"
 
 
 class SuratIzin(models.Model):
     SESI_CHOICES = [('Subuh','Subuh'), ('Sore','Sore'), ('Malam','Malam')]
     santri = models.ForeignKey(Santri, on_delete=models.CASCADE)
+    kelas = models.CharField(max_length=50, blank=True, null=True)
     tanggal = models.DateField()
     sesi = models.CharField(max_length=10, choices=SESI_CHOICES)
-    file = models.FileField(upload_to='surat_izin/')
-    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
-    uploaded_at = models.DateTimeField(default=timezone.now)
+    alasan = models.TextField(max_length=500, default='')
     status = models.CharField(max_length=20, default='Disetujui')
     note = models.TextField(blank=True, null=True)
 
     class Meta:
-        unique_together = ('santri', 'tanggal', 'sesi')
+        unique_together = ('santri', 'kelas', 'tanggal', 'sesi')
 
     def __str__(self):
-        return f"Izin {self.santri} - {self.tanggal} {self.sesi} - {self.status}"
+        return f"Izin {self.santri} - {self.kelas} {self.tanggal} {self.sesi} {self.alasan} - {self.status}"

@@ -51,6 +51,25 @@ class StartTelatView(APIView):
 ABSENSI_KEY = "absensi_start_time"
 TELAT_KEY = "telat_start_time"
 
+# Surat Izin
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def api_upload_surat_izin(request):
+    # expected: santri_pk, tanggal (YYYY-MM-DD), sesi, alasan
+    santri_pk = request.data.get('santri_pk')
+    tanggal = request.data.get('tanggal')
+    sesi = request.data.get('sesi')
+    alasan = request.data.get('alasan')
+    if not (santri_pk and tanggal and sesi and alasan):
+        return Response({'ok': False, 'message': 'Lengkapi data'}, status=400)
+    try:
+        s = Santri.objects.get(pk=santri_pk)
+    except Santri.DoesNotExist:
+        return Response({'ok': False, 'message': 'Santri tidak ditemukan'}, status=404)
+    si = SuratIzin(santri=s, tanggal=tanggal, sesi=sesi, alasan=alasan)
+    si.save()
+    return Response({'ok': True, 'surat': SuratIzinSerializer(si).data})
+
 # LIST SANTRI
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -112,9 +131,17 @@ class RegisterSantriView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = serializer.save()
-        return Response({"id": user.id, "username": user.username, "role": "santri"})
 
+        santri = serializer.save()
+
+        return Response({
+            "santri_id": santri.id,
+            "user_id": santri.user.id,
+            "username": santri.user.username,
+            "nama": santri.nama,
+            "sektor": santri.sektor,
+            "role": "santri"
+        })
 
 # ======================================================
 # LOGIN
@@ -139,7 +166,8 @@ class LoginPengurusView(APIView):
             "user": {
                 "id": user.id,
                 "username": user.username,
-                "nama_lengkap": santri_name.nama if santri_name else None
+                "nama_lengkap": santri_name.nama if santri_name else None,
+                "santri_id": santri_name.id if santri_name else None
             }
         })
 
@@ -166,10 +194,10 @@ def api_santri_registrasi_wajah(request):
         try:
             santri = Santri.objects.get(id=santri_id)
         except Santri.DoesNotExist:
-            return Response(
-                {"error": f"Santri dengan id {santri_id} tidak ditemukan"},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            try:
+                santri = Santri.objects.get(user_id=santri_id)
+            except Santri.DoesNotExist:
+                return Response({"error": f"Santri dengan id {santri_id} tidak ditemukan"}, status=404)
 
         # ✅ Decode base64 ke PIL image
         pil_img = decode_base64_image(image_data)

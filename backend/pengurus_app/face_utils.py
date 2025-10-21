@@ -25,7 +25,6 @@ def get_all_encodings():
 
 
 def encode_face_from_image(pil_image):
-    """Ambil encoding & lokasi wajah pakai model HOG (lebih ringan)."""
     img = np.array(pil_image.convert("RGB"))
     face_locations = face_recognition.face_locations(img, model='hog')
     if not face_locations:

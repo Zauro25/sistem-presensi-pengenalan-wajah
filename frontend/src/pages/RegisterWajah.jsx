@@ -1,13 +1,14 @@
 import React, { useRef, useEffect, useState } from "react";
 
 export default function RegisterWajah() {
-  const [mode, setMode] = useState("idle"); // idle | kamera | upload
+  const [mode, setMode] = useState("idle");
   const [file, setFile] = useState(null);
   const [msg, setMsg] = useState("");
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
   const streamRef = useRef(null);
+  const [isRegistered, setIsRegistered] = useState(false)
 
   useEffect(() => {
     if (mode === "kamera") startCamera();
@@ -21,7 +22,7 @@ export default function RegisterWajah() {
       const videoEl = videoRef.current;
 
       if (!videoEl) {
-        setMsg("❌ Video element belum siap.");
+        setMsg("Video element belum siap.");
         return;
       }
 
@@ -34,7 +35,7 @@ export default function RegisterWajah() {
       detectLoop();
     } catch (err) {
       console.error("Gagal akses kamera:", err);
-      setMsg("❌ Gagal akses kamera, cek izin browser.");
+      setMsg("Gagal akses kamera, cek permission di browser.");
     }
   };
 
@@ -59,10 +60,12 @@ export default function RegisterWajah() {
 
     const userData = JSON.parse(localStorage.getItem("user"));
     const token = localStorage.getItem("token");
-    const santriId = userData?.id;
+    const santriId = userData?.santri_id || userData?.id;
 
-    if (!santriId || !token) {
-      setMsg("⚠️ Data santri tidak ditemukan di localStorage.");
+
+    if (!userData || !userData.santri_id) {
+      console.warn("Data santri belum lengkap:", userData);
+      setMsg("Data santri tidak ditemukan di localStorage.");
       return;
     }
 
@@ -89,13 +92,13 @@ export default function RegisterWajah() {
       if (res.ok && data.location) {
         drawBox(data.location, data.nama, data.sektor);
         setMsg(`✅ Wajah ${data.nama} berhasil diregistrasi!`);
-        stopCamera(); // stop real-time capture kalau sudah sukses
+        return;
       } else {
         setMsg("🔍 Mendeteksi wajah...");
       }
     } catch (err) {
       console.error("Error koneksi:", err);
-      setMsg("❌ Error koneksi ke server.");
+      setMsg("Error koneksi ke server.");
     }
   };
 
@@ -146,7 +149,7 @@ export default function RegisterWajah() {
 
     const userData = JSON.parse(localStorage.getItem("user"));
     const token = localStorage.getItem("token");
-    const santriId = userData?.id;
+    const santriId = userData?.santri_id;
 
     const formData = new FormData();
     formData.append("santri_id", santriId);
@@ -161,12 +164,12 @@ export default function RegisterWajah() {
 
       const data = await res.json();
       if (res.ok) {
-        setMsg("✅ Foto berhasil diupload & wajah terdeteksi!");
+        setMsg("Foto berhasil diupload & wajah terdeteksi!");
       } else {
-        setMsg("❌ " + (data.error || data.message));
+        setMsg("Error " + (data.error || data.message));
       }
     } catch (err) {
-      setMsg("❌ Error koneksi: " + err.message);
+      setMsg("Error koneksi: " + err.message);
     }
   };
 
@@ -190,7 +193,7 @@ export default function RegisterWajah() {
               onClick={() => setMode("idle")}
               className="bg-red-700 hover:bg-red-800 text-white px-6 py-3 rounded-lg font-bold active:scale-95 transition-transform"
             >
-              ❌ Matikan Kamera
+              Matikan Kamera
             </button>
           )}
 
@@ -210,7 +213,7 @@ export default function RegisterWajah() {
           <div style={{ position: "relative" }}>
             <video
               ref={videoRef}
-              style={{ width: "100%", maxWidth: "480px", borderRadius: "10px" }}
+              style={{ width: "100%", maxWidth: "480px", borderRadius: "10px", transform: "scaleX(-1)" }}
             />
             <canvas
               ref={canvasRef}

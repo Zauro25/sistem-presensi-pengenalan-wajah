@@ -21,6 +21,7 @@ export default function Login() {
           role: res.role || (res.user?.is_staff ? "pengurus" : "santri"),
           username: res.user?.username || username,
           nama_lengkap: res.user?.nama_lengkap,
+          santri_id: res.user?.santri_id,
           id: res.user?.id,
         };
 

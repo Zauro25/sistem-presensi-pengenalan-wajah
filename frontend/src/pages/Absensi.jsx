@@ -5,7 +5,8 @@ import CameraCapture from "../components/CameraCapture";
 export default function Absensi() {
   const [result, setResult] = useState(null);
   const [tanggal, setTanggal] = useState("");
-  const [sesi, setSesi] = useState("Subuh");
+  const [sesi, setSesi] = useState("Pilih Sesi");
+  const [kelas, setKelas] = useState("Pilih Kelas");
   const [active, setActive] = useState(false);
 
   const startAbsensi = async () => {
@@ -20,6 +21,14 @@ export default function Absensi() {
         sesi,
       }),
     });
+    if (!tanggal) {
+      alert("pilih tanggal terlebih dahulu");
+      return;
+    }
+    else if (!sesi) {
+      alert("pilih sesi terlebih dahulu");
+      return;
+    }
     alert("✅ Absensi dimulai");
     setActive(true);
   };
@@ -86,6 +95,17 @@ export default function Absensi() {
               <option value="Subuh">Subuh</option>
               <option value="Sore">Sore</option>
               <option value="Malam">Malam</option>
+            </select>
+            <select
+              value={kelas}
+              onChange={(e) => setKelas(e.target.value)}
+              className="px-4 py-3 rounded-lg border text-center font-bold text-white bg-gray-700 w-full"
+            >
+              <option value="Lambatan">Lambatan</option>
+              <option value="Cepatan">Cepatan</option>
+              <option value="Pra Saringan">Pra Saringan</option>
+              <option value="Saringan">Saringan</option>
+              <option value="Semua Kelas">Semua Kelas</option>
             </select>
           </div>
 
