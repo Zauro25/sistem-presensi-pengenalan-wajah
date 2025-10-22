@@ -11,6 +11,7 @@ import Rekap from "./pages/Rekap";
 import DashboardSantri from "./pages/DashboardSantri";
 import RegisterSantri from "./pages/RegisterSantri";
 import RegisterWajah from "./pages/RegisterWajah";
+import ValidasiIzin from "./pages/ValidasiIzin"; 
 
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem("token");
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="/register" element={<RegisterSantri />} />
         <Route path="/absensi" element={<ProtectedRoute><Absensi/></ProtectedRoute>} />
         <Route path="/izin" element={<ProtectedRoute><ListIzin/></ProtectedRoute>} />
+        <Route path="/validasi-izin" element={<ProtectedRoute><ValidasiIzin/></ProtectedRoute>} />
         <Route path="/rekap" element={<ProtectedRoute><Rekap/></ProtectedRoute>} />
         <Route path="/register-wajah" element={<ProtectedRoute><RegisterWajah /></ProtectedRoute>}/>
         <Route path="/dashboard-santri" element={<ProtectedRoute><DashboardSantri /></ProtectedRoute>}/>

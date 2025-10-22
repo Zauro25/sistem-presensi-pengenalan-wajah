@@ -52,7 +52,7 @@ class SuratIzin(models.Model):
     tanggal = models.DateField()
     sesi = models.CharField(max_length=10, choices=SESI_CHOICES)
     alasan = models.TextField(max_length=500, default='')
-    status = models.CharField(max_length=20, default='Disetujui')
+    status = models.CharField(max_length=20, default='Menunggu')
     note = models.TextField(blank=True, null=True)
 
     class Meta:

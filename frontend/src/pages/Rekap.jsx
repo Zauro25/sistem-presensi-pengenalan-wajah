@@ -5,17 +5,24 @@ export default function Rekap() {
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [data, setData] = useState(null);
+  const [kelas, setKelas] = useState("All");
 
-  const doRekap = async () => {
-    if (!start || !end) {
-      alert("Pilih Dari dan Sampai tanggalnya");
-      return;
-    }
-    const res = await rekap(start, end);
-    if (res.ok) setData(res);
-    else alert(res.message || "Gagal");
-  };
+const doRekap = async () => {
+  if (!start || !end) {
+    alert("Pilih Dari dan Sampai tanggalnya");
+    return;
+  }
+  const params = new URLSearchParams({ start, end });
+  if (kelas) params.append("kelas", kelas);
+  const token = localStorage.getItem("token");
 
+  const res = await fetch(`http://127.0.0.1:8000/api/rekap/?${params.toString()}`, {
+    headers: { Authorization: "Token " + token },
+  });
+  const data = await res.json();
+  if (data.ok) setData(data);
+  else alert(data.message || "Gagal");
+};
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-800">
       <div className="bg-gray-300 rounded-3xl shadow-lg p-8 w-[90%] max-w-5xl text-center">
@@ -41,6 +48,20 @@ export default function Rekap() {
               onChange={(e) => setEnd(e.target.value)}
               className="px-4 py-3 rounded-lg border text-center font-bold text-white"
             />
+          </div>
+          <div className="flex flex-col items-center">
+            <span className="font-bold mb-2">KELAS</span>
+            <select
+              value={kelas}
+              onChange={(e) => setKelas(e.target.value)}
+              className="px-4 py-3 rounded-lg border text-center font-bold text-white bg-gray-700 w-full"
+            >
+              <option value="Semua Kelas">Semua Kelas</option>
+              <option value="Lambatan">Lambatan</option>
+              <option value="Cepatan">Cepatan</option>
+              <option value="Pra Saringan">Pra Saringan</option>
+              <option value="Saringan">Saringan</option>
+            </select>
           </div>
         </div>
 

@@ -1,80 +1,157 @@
-import React, {useState, useEffect} from "react";
-import { listSantri, uploadIzin, listSantri as fetchSantriApi } from "../services/api";
+import React, { useState, useEffect } from "react";
+import { listSantri, uploadIzin } from "../services/api";
 
 export default function ListIzin() {
-  const [items, setItems] = useState([]);
-  const [santris, setSantris] = useState([]);
-  const [file, setFile] = useState(null);
-  const [santriPk, setSantriPk] = useState("");
+  const [riwayatIzin, setRiwayatIzin] = useState([]);
   const [listSantris, setListSantris] = useState([]);
+  const [selectedSantri, setSelectedSantri] = useState("");
+  const [kelas, setKelas] = useState("");
   const [tanggal, setTanggal] = useState("");
-  const [sesi, setSesi] = useState("Subuh");
+  const [sesi, setSesi] = useState("");
+  const [alasan, setAlasan] = useState("");
 
-  useEffect(()=>{ fetchAll(); },[]);
-  async function fetchAll(){
-    const r = await fetch(`${process.env.REACT_APP_API_BASE || 'http://127.0.0.1:8000/api'}/surat/`, { headers: {} }).then(r=>r.json());
-    if(r.ok) setItems(r.data);
-    const s = await fetchSantriApi();
-    if(s.ok) setSantris(s.data);
-  }
+  useEffect(() => {
+    fetchData();
+  }, []);
 
-  async function upload(e){
+  const fetchData = async () => {
+    // ambil list santri
+    const s = await listSantri();
+    if (s.ok) setListSantris(s.data);
+    // ambil list surat izin (kalau mau nampilin riwayat)
+    const izinRes = await fetch(`http://127.0.0.1:8000/api/izin/list/`, {
+      headers: { Authorization: "Token " + localStorage.getItem("token") },
+    });
+    if (izinRes.ok) {
+      const data = await izinRes.json();
+      if (data.ok) setRiwayatIzin(data.data || []);
+    }
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if(!listSantri || !file || !tanggal || !sesi){
-      alert("Lengkapi data");
+
+    if (!selectedSantri || !tanggal || !sesi || !alasan) {
+      alert("Data belum lengkap!");
       return;
     }
-    const fd = new FormData();
-    fd.append('nama_santri', listSantris.find(s=>s.id.toString()===santriPk)?.nama || '');
-    fd.append('tanggal', tanggal);
-    fd.append('sesi', sesi);
-    fd.append('file', file);
-    const r = await uploadIzin(fd);
-    if(r.ok) {
-      alert('File diupload');
-      fetchAll();
-    } else alert(r.message || 'Gagal');
-  }
+
+    const formData = new FormData();
+    formData.append("santri", selectedSantri);
+    formData.append("kelas", kelas);
+    formData.append("tanggal", tanggal);
+    formData.append("sesi", sesi);
+    formData.append("alasan", alasan);
+
+    const res = await uploadIzin(formData);
+
+    if (res.ok) {
+      alert("Permohonan izin berhasil dikirim!");
+      setAlasan("");
+      fetchData();
+    } else {
+      alert("Gagal kirim izin: " + (res.message || "error tidak diketahui"));
+    }
+  };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-start py-10 bg-gray-800">
-      <div className="bg-gray-300 rounded-3xl shadow-lg p-6 w-full max-w-6xl flex flex-col items-center">
-      <div className="container">
-      <h3 className="text-gray font-semibold">Upload Surat Izin</h3>
-      <form onSubmit={upload}>
-        <select className="form-select mb-2" onChange={e=>setListSantris(e.target.value)} value={listSantri}>
-          <option value="">Pilih santri</option>
-          {santris.map(s=> <option key={s.id} value={s.id}>{s.santri_id} - {s.nama}</option>)}
-        </select>
-        <input type="date" className="form-control mb-2" value={tanggal} onChange={e=>setTanggal(e.target.value)} />
-        <select className="form-select mb-2" value={sesi} onChange={e=>setSesi(e.target.value)}>
-          <option>Sesi Subuh</option>
-          <option>Sesi Sore</option>
-          <option>Sesi Malam</option>
-        </select>
-         <input className="form-control mb-2" placeholder="Alasan" />
-        <input type="file" className="form-control mb-2 " accept=".pdf,image/*" onChange={e=>setFile(e.target.files[0])} />
-        <button className="btn btn-primary"><strong>Upload Surat Izin</strong></button>
-      </form>
+    <div className="min-h-screen flex flex-col items-center justify-start py-10 bg-gray-800 text-white">
+      <div className="bg-gray-300 rounded-3xl shadow-lg p-6 w-full max-w-5xl flex flex-col items-center text-gray-800">
+        <h2 className="text-2xl font-extrabold mb-6">Permohonan Izin Santri</h2>
 
-      <hr/>
-      <h5>Riwayat Perizinan</h5>
-      <table className="table">
-        <thead><tr><th>Santri</th><th>Tanggal</th><th>Sesi</th><th>File</th><th>Status</th></tr></thead>
-        <tbody>
-          {items.map(it => (
-            <tr key={it.id}>
-              <td>{it.santri.santri_id} - {it.santri.nama}</td>
-              <td>{it.tanggal}</td>
-              <td>{it.sesi}</td>
-              <td><a href={it.file} target="_blank" rel="noreferrer">Lihat</a></td>
-              <td>{it.status}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-    </div>
+        <form
+          onSubmit={handleSubmit}
+          className="w-full max-w-md flex flex-col gap-3 mb-8 text-white"
+        >
+          <select
+            className="p-3 rounded-lg border font-semibold"
+            value={selectedSantri}
+            onChange={(e) => setSelectedSantri(e.target.value)}
+          >
+            <option value="">Pilih Santri</option>
+            {listSantris.map((s) => (
+              <option key={s.id} value={s.santri_id}>
+                {s.santri_id} - {s.nama}
+              </option>
+            ))}
+          </select>
+
+          <input
+            type="text"
+            placeholder="Kelas (opsional)"
+            value={kelas}
+            onChange={(e) => setKelas(e.target.value)}
+            className="p-3 rounded-lg border font-semibold"
+          />
+
+          <input
+            type="date"
+            value={tanggal}
+            onChange={(e) => setTanggal(e.target.value)}
+            className="p-3 rounded-lg border font-semibold"
+          />
+
+          <select
+            value={sesi}
+            onChange={(e) => setSesi(e.target.value)}
+            className="p-3 rounded-lg border font-semibold"
+          >
+            <option value="">Pilih Sesi</option>
+            <option value="Subuh">Subuh</option>
+            <option value="Sore">Sore</option>
+            <option value="Malam">Malam</option>
+          </select>
+
+          <textarea
+            placeholder="Alasan izin..."
+            value={alasan}
+            onChange={(e) => setAlasan(e.target.value)}
+            className="p-3 rounded-lg border font-semibold resize-none"
+          />
+
+          <button
+            type="submit"
+            className="bg-blue-700 hover:bg-blue-800 text-white py-3 rounded-lg font-bold active:scale-95 transition-transform"
+          >
+            Kirim Permohonan Izin
+          </button>
+        </form>
+
+        {/* Riwayat */}
+        <div className="w-full flex flex-col items-center">
+          <h3 className="font-bold text-xl mb-4">Riwayat Izin</h3>
+          {riwayatIzin.length === 0 ? (
+            <p className="text-gray-700">Belum ada riwayat izin.</p>
+          ) : (
+            <table className="table-auto w-full border border-gray-400 text-sm">
+              <thead className="bg-gray-400">
+                <tr>
+                  <th className="border border-gray-500 px-2 py-1">Santri</th>
+                  <th className="border border-gray-500 px-2 py-1">Tanggal</th>
+                  <th className="border border-gray-500 px-2 py-1">Sesi</th>
+                  <th className="border border-gray-500 px-2 py-1">Kelas</th>
+                  <th className="border border-gray-500 px-2 py-1">Alasan</th>
+                  <th className="border border-gray-500 px-2 py-1">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {riwayatIzin.map((it) => (
+                  <tr key={it.id} className="text-center">
+                    <td className="border border-gray-500 px-2 py-1">
+                      {it.santri?.santri_id} - {it.santri?.nama}
+                    </td>
+                    <td className="border border-gray-500 px-2 py-1">{it.tanggal}</td>
+                    <td className="border border-gray-500 px-2 py-1">{it.sesi}</td>
+                    <td className="border border-gray-500 px-2 py-1">{it.kelas || "-"}</td>
+                    <td className="border border-gray-500 px-2 py-1">{it.alasan}</td>
+                    <td className="border border-gray-500 px-2 py-1 font-bold">{it.status}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -19,6 +19,7 @@ export default function Absensi() {
       body: JSON.stringify({
         tanggal: tanggal || new Date().toISOString().slice(0, 10),
         sesi,
+        kelas,
       }),
     });
     if (!tanggal) {
@@ -29,7 +30,7 @@ export default function Absensi() {
       alert("pilih sesi terlebih dahulu");
       return;
     }
-    alert("✅ Absensi dimulai");
+    alert("Absensi dimulai");
     setActive(true);
   };
 
@@ -45,7 +46,7 @@ export default function Absensi() {
         sesi,
       }),
     });
-    alert("⏳ Hitung keterlambatan dimulai");
+    alert("Hitung keterlambatan dimulai");
   };
 
   const endAbsensi = async () => {
@@ -53,7 +54,7 @@ export default function Absensi() {
       method: "POST",
       headers: { Authorization: "Token " + localStorage.getItem("token") },
     });
-    alert("🛑 Absensi dihentikan");
+    alert("Absensi dihentikan");
     setActive(false);
     setResult(null);
   };
@@ -62,7 +63,8 @@ export default function Absensi() {
     const res = await recognizeAndAttend(
       dataURL,
       tanggal || new Date().toISOString().slice(0, 10),
-      sesi
+      sesi,
+      kelas
     );
 
     if (res.ok && res.santri) {
@@ -92,6 +94,7 @@ export default function Absensi() {
               onChange={(e) => setSesi(e.target.value)}
               className="px-4 py-3 rounded-lg border text-center font-bold text-white bg-gray-700 w-full"
             >
+              <option value="Pilih Sesi">Pilih Sesi</option>
               <option value="Subuh">Subuh</option>
               <option value="Sore">Sore</option>
               <option value="Malam">Malam</option>
@@ -101,11 +104,11 @@ export default function Absensi() {
               onChange={(e) => setKelas(e.target.value)}
               className="px-4 py-3 rounded-lg border text-center font-bold text-white bg-gray-700 w-full"
             >
+              <option value="Semua Kelas">Semua Kelas</option>
               <option value="Lambatan">Lambatan</option>
               <option value="Cepatan">Cepatan</option>
               <option value="Pra Saringan">Pra Saringan</option>
               <option value="Saringan">Saringan</option>
-              <option value="Semua Kelas">Semua Kelas</option>
             </select>
           </div>
 

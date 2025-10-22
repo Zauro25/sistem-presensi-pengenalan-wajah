@@ -54,7 +54,7 @@ TELAT_KEY = "telat_start_time"
 # Surat Izin
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def api_upload_surat_izin(request):
+def api_permohonan_izin(request):
     # expected: santri_pk, tanggal (YYYY-MM-DD), sesi, alasan
     santri_pk = request.data.get('santri_pk')
     tanggal = request.data.get('tanggal')
@@ -69,6 +69,55 @@ def api_upload_surat_izin(request):
     si = SuratIzin(santri=s, tanggal=tanggal, sesi=sesi, alasan=alasan)
     si.save()
     return Response({'ok': True, 'surat': SuratIzinSerializer(si).data})
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_izin_santri(request):
+    izin = SuratIzin.objects.filter(santri__user=request.user).select_related('santri').order_by('-tanggal')
+    return Response({'ok': True, 'data': SuratIzinSerializer(izin, many=True).data})
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_permohonan_izin(request):
+    user = request.user
+    if user.is_staff:
+        izin = SuratIzin.objects.filter(status="Menunggu").select_related('santri').order_by('-tanggal')
+    else:
+        try:
+            santri = Santri.objects.get(user=user)
+            izin = SuratIzin.objects.filter(santri=santri).select_related('santri').order_by('-tanggal')
+        except Santri.DoesNotExist:
+            return Response({"ok": False, "message": "Data santri tidak ditemukan"}, status=404)
+    if hasattr(user, 'role') and user.role.lower() == 'pengurus':
+        izin = izin.filter(status="Menunggu")
+    data = [{
+        "id": i.id,
+        "santri_id": i.santri.santri_id,
+        "nama": i.santri.nama,
+        "kelas": i.kelas,
+        "tanggal": i.tanggal,
+        "sesi": i.sesi,
+        "alasan": i.alasan,
+        "status": i.status
+    } for i in izin]
+    return Response({"ok": True, "data": data})
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def validasi_izin(request, izin_id):
+    try:
+        izin = SuratIzin.objects.get(id=izin_id)
+    except SuratIzin.DoesNotExist:
+        return Response({'ok': False, 'message': 'Izin tidak ditemukan'}, status=404)
+
+    action = request.data.get('status')  # “Disetujui” atau “Ditolak”
+    if action not in ['Disetujui', 'Ditolak']:
+        return Response({'ok': False, 'message': 'Status tidak valid'}, status=400)
+
+    izin.status = action
+    izin.note = request.data.get('note', '')
+    izin.save()
+    return Response({'ok': True, 'message': f'Izin {action} berhasil'})
+
 
 # LIST SANTRI
 @api_view(['GET'])
@@ -91,23 +140,22 @@ def api_get_user(request):
         "role": role
     })
 
-# UPLOAD SURAT IZIN (santri or pengurus) — santri can upload, auto approved
 @api_view(['POST'])
-@permission_classes([AllowAny])  # allow any so unauthenticated santri can upload; but ideally use token per santri later
-def api_upload_surat_izin(request):
-    # expected: santri_pk, tanggal (YYYY-MM-DD), sesi, file
-    santri_pk = request.data.get('santri_pk')
+@permission_classes([AllowAny])  
+def api_permohonan_izin(request):
+    santri = request.data.get('santri')
+    kelas = request.data.get('kelas')
     tanggal = request.data.get('tanggal')
     sesi = request.data.get('sesi')
-    file = request.FILES.get('file')
-    if not (santri_pk and tanggal and sesi and file):
+    alasan = request.data.get('alasan')
+    if not (santri and kelas and tanggal and sesi and alasan):
         return Response({'ok': False, 'message': 'Lengkapi data'}, status=400)
     try:
-        s = Santri.objects.get(pk=santri_pk)
+        s = Santri.objects.get(santri_id=santri)
     except Santri.DoesNotExist:
         return Response({'ok': False, 'message': 'Santri tidak ditemukan'}, status=404)
     try:
-        si = SuratIzin(santri=s, tanggal=tanggal, sesi=sesi, file=file, uploaded_by=request.user if request.user.is_authenticated else None, status='Disetujui')
+        si = SuratIzin(santri=s, kelas=kelas, tanggal=tanggal, sesi=sesi, alasan=alasan, status='Menunggu')
         si.save()
     except IntegrityError:
         return Response({'ok': False, 'message': 'Sudah ada surat izin untuk santri ini pada tanggal & sesi tersebut'}, status=400)
@@ -199,11 +247,9 @@ def api_santri_registrasi_wajah(request):
             except Santri.DoesNotExist:
                 return Response({"error": f"Santri dengan id {santri_id} tidak ditemukan"}, status=404)
 
-        # ✅ Decode base64 ke PIL image
         pil_img = decode_base64_image(image_data)
         img = np.array(pil_img)
 
-        # ✅ Deteksi wajah pakai HOG (efisien di Supabase karena non-GPU)
         face_locations = face_recognition.face_locations(img, model="hog")
         if not face_locations:
             return Response({"error": "Wajah tidak ditemukan"}, status=400)
@@ -288,16 +334,27 @@ def api_start_absensi(request):
     sesi = request.data.get("sesi")
     if not tanggal or not sesi:
         return Response({"ok": False, "message": "Lengkapi tanggal & sesi"})
-    cache.set(ABSENSI_KEY, {"tanggal": tanggal, "sesi": sesi, "time": timezone.now()}, 3600)
+    absensi_info = {
+        "tanggal": tanggal,
+        "sesi": sesi,
+        "time": timezone.now().isoformat(),
+        "telat_start": None
+    }
+    cache.set(ABSENSI_KEY, absensi_info, 3600)
     return Response({"ok": True, "message": "Absensi dimulai"})
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def api_start_telat(request):
-    telat_time = timezone.now()
-    cache.set(TELAT_KEY, telat_time, 3600)
-    return Response({"ok": True, "message": "Hitung keterlambatan dimulai"})
+    absensi_info = cache.get(ABSENSI_KEY)
+    if not absensi_info:
+        return Response({"ok": False, "message": "Absensi belum dimulai"}, status=400)
+
+    absensi_info["telat_start"] = timezone.now().isoformat()
+    cache.set(ABSENSI_KEY, absensi_info, 3600)
+    return Response({"ok": True, "message": "Penghitungan keterlambatan dimulai"})
+
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -313,13 +370,15 @@ def api_end_absensi(request):
 def api_recognize_and_attend(request):
     data_url = request.data.get('image')
     absensi_info = cache.get(ABSENSI_KEY)
-    telat_time = cache.get(TELAT_KEY)
+    kelas = request.data.get("kelas") or "Kamu kelas apa?"
+    print(absensi_info)
 
     if not absensi_info:
         return Response({"ok": False, "message": "Absensi belum dimulai"}, status=400)
 
     tanggal = absensi_info['tanggal']
     sesi = absensi_info['sesi']
+    telat_start = absensi_info.get('telat_start')
 
     pil_img = decode_base64_image(data_url)
     santri, info, location = recognize_from_image_pil(pil_img, tolerance=0.45)
@@ -327,28 +386,37 @@ def api_recognize_and_attend(request):
         return Response({"ok": False, "message": "Wajah tidak cocok"}, status=404)
 
     status_absensi = "Hadir"
-    if telat_time:
-        diff = (timezone.now() - telat_time).total_seconds() / 60
-        if diff <= 5:
-            status_absensi = "T1"
-        elif diff <= 15:
-            status_absensi = "T2"
-        else:
-            status_absensi = "T3"
+    if telat_start:
+        try:
+            telat_dt = datetime.datetime.fromisoformat(telat_start)
+            if timezone.is_naive(telat_dt):
+                telat_dt = timezone.make_aware(telat_dt)
+            diff = (timezone.now() - telat_dt).total_seconds() / 60
+            if diff <= 5:
+                status_absensi = "T1"
+            elif diff <= 15:
+                status_absensi = "T2"
+            else:
+                status_absensi = "T3"
+        except Exception as e:
+            print("TELAT ERROR:", e)
 
     Absensi.objects.update_or_create(
         santri=santri,
         tanggal=tanggal,
         sesi=sesi,
-        defaults={"status": status_absensi, "created_by": request.user}
+        kelas=kelas,
+        defaults={
+            "status": status_absensi,
+            "kelas": kelas,
+            "created_by": request.user
+        }
     )
 
     return Response({
         "ok": True,
-        "santri": {
-            "id": santri.id,
-            "nama": santri.nama
-        },
+        "santri": {"id": santri.id, "nama": santri.nama},
+        "kelas": kelas,
         "status": status_absensi,
         "location": {
             "top": location[0],
@@ -357,12 +425,14 @@ def api_recognize_and_attend(request):
             "left": location[3]
         }
     })
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_rekap(request):
     # params: start (YYYY-MM-DD), end (YYYY-MM-DD)
     start = request.GET.get('start')
     end = request.GET.get('end')
+    kelas_filter = request.GET.get('kelas')
     if not start or not end:
         return Response({'ok': False, 'message': 'start & end required'}, status=400)
     try:
@@ -381,23 +451,35 @@ def api_rekap(request):
     for dt in all_dates:
         for ss in sesi_list:
             headers.append({'tanggal': dt.isoformat(), 'sesi': ss, 'col_key': f"{dt.isoformat()}_{ss}"})
+    if kelas_filter:
+        santri_ids = Absensi.objects.filter(kelas=kelas_filter).values_list('santri_id', flat=True).distinct()
+        santri_queryset = Santri.objects.filter(id__in=santri_ids)
+    else:
+        santri_queryset = Santri.objects.all()
 
     # group santri by gender
-    santri_putra = Santri.objects.filter(jenis_kelamin='L').order_by('nama')
-    santri_putri = Santri.objects.filter(jenis_kelamin='P').order_by('nama')
+    santri_putra = santri_queryset.filter(jenis_kelamin='L').order_by('nama')
+    santri_putri = santri_queryset.filter(jenis_kelamin='P').order_by('nama')
 
     def build_table(santri_queryset):
         rows = []
         for s in santri_queryset:
             row = {'santri_id': s.santri_id, 'nama': s.nama}
             for h in headers:
-                # cek Absensi
-                a = Absensi.objects.filter(santri=s, tanggal=h['tanggal'], sesi=h['sesi']).first()
+                a = Absensi.objects.filter(santri=s, tanggal=h['tanggal'], sesi=h['sesi'])
+                if kelas_filter:
+                    a = a.filter(kelas=kelas_filter)
+                a = a.first()
+
                 if a:
                     row[h['col_key']] = a.status
                 else:
-                    # cek izin
-                    izin = SuratIzin.objects.filter(santri=s, tanggal=h['tanggal'], sesi=h['sesi'], status='Disetujui').first()
+                    izin = SuratIzin.objects.filter(
+                        santri=s,
+                        tanggal=h['tanggal'],
+                        sesi=h['sesi'],
+                        status='Disetujui'
+                    ).first()
                     if izin:
                         row[h['col_key']] = 'Izin'
                     else:
@@ -409,6 +491,7 @@ def api_rekap(request):
     putri_rows = build_table(santri_putri)
 
     return Response({'ok': True, 'headers': headers, 'putra': putra_rows, 'putri': putri_rows})
+
 
 # EXPORT XLSX (sheet putra & putri)
 @api_view(['GET'])

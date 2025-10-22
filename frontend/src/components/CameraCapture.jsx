@@ -55,7 +55,7 @@ export default function CameraCapture({ onCapture, active }) {
     return res;
   };
 
- const drawBox = (res) => {
+  const drawBox = (res) => {
     const canvas = canvasRef.current;
     const video = videoRef.current;
     if (!canvas || !res?.location || !video) return;
@@ -71,10 +71,10 @@ export default function CameraCapture({ onCapture, active }) {
     const scaleX = displayWidth / videoWidth;
     const scaleY = displayHeight / videoHeight;
 
-    // karena tampilan di-flip, posisi X harus dikoreksi
-    const flippedLeft = displayWidth - right * scaleX;
+    // ❌ Jangan dibalik lagi! karena preview video udah di-flip
     const boxWidth = (right - left) * scaleX;
     const boxHeight = (bottom - top) * scaleY;
+    const scaledLeft = left * scaleX;
     const scaledTop = top * scaleY;
 
     canvas.width = displayWidth;
@@ -83,7 +83,7 @@ export default function CameraCapture({ onCapture, active }) {
 
     ctx.strokeStyle = "lime";
     ctx.lineWidth = 3;
-    ctx.strokeRect(flippedLeft, scaledTop, boxWidth, boxHeight);
+    ctx.strokeRect(scaledLeft, scaledTop, boxWidth, boxHeight);
 
     const label =
       res.santri?.nama && res.status
@@ -92,8 +92,9 @@ export default function CameraCapture({ onCapture, active }) {
 
     ctx.fillStyle = "lime";
     ctx.font = "16px Arial";
-    ctx.fillText(label, flippedLeft + 4, scaledTop - 10);
+    ctx.fillText(label, scaledLeft + 4, scaledTop - 10);
   };
+
 
   return (
     <div style={{ position: "relative", display: "inline-block" }}>

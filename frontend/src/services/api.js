@@ -1,4 +1,4 @@
-const API_BASE = "http://localhost:8000/api";
+const API_BASE = "http://127.0.0.1:8000/api";
 
 function authHeaders() {
   const token = localStorage.getItem("token");
@@ -56,19 +56,19 @@ export async function registerSantri(formData) {
   return res.json();
 }
 
-export async function recognizeAndAttend(dataURL, tanggal, sesi) {
+export async function recognizeAndAttend(dataURL, tanggal, sesi, kelas) {
   const token = localStorage.getItem("token");
   const res = await fetch(`${API_BASE}/recognize/`, {
     method: 'POST',
     headers: { "Content-Type": "application/json", ...(token ? { "Authorization": `Token ${token}` } : {}) },
-    body: JSON.stringify({ image: dataURL, tanggal, sesi })
+    body: JSON.stringify({ image: dataURL, tanggal, sesi, kelas })
   });
-  return res.json();
+  return await res.json();
 }
 
 export async function uploadIzin(formData) {
   const token = localStorage.getItem("token");
-  const res = await fetch(`${API_BASE}/surat/upload/`, {
+  const res = await fetch(`${API_BASE}/santri/izin/`, {
     method:'POST',
     headers: token ? { "Authorization": `Token ${token}` } : {},
     body: formData
@@ -76,17 +76,22 @@ export async function uploadIzin(formData) {
   return res.json();
 }
 
-export async function rekap(start, end) {
+export async function rekap(start, end, kelas = "") {
   const token = localStorage.getItem("token");
-  const params = new URLSearchParams({ start, end });
-  const res = await fetch(`${API_BASE}/rekap/?${params.toString()}`, {
-    headers: token ? { "Authorization": `Token ${token}` } : {}
+  const url = new URL("http://127.0.0.1:8000/api/rekap/");
+  url.searchParams.append("start", start);
+  url.searchParams.append("end", end);
+  if (kelas) url.searchParams.append("kelas", kelas); // kirim kelas kalau dipilih
+
+  const res = await fetch(url, {
+    headers: { Authorization: "Token " + token },
   });
-  return res.json();
+  return await res.json();
 }
 
-export function exportXLSX(start, end) {
-  const params = new URLSearchParams({ start, end });
+
+export function exportXLSX(start, end, kelas) {
+  const params = new URLSearchParams({ start, end, kelas });
   const token = localStorage.getItem("token");
   const url = `${API_BASE}/rekap/export/xlsx/?${params.toString()}`;
   // open with token? better open via backend; for simplicity, just open url in browser - browser won't include token header
@@ -103,8 +108,8 @@ export function exportXLSX(start, end) {
     });
 }
 
-export function exportPDF(start, end) {
-  const params = new URLSearchParams({ start, end });
+export function exportPDF(start, end, kelas) {
+  const params = new URLSearchParams({ start, end, kelas });
   const token = localStorage.getItem("token");
   const url = `${API_BASE}/rekap/export/pdf/?${params.toString()}`;
   return fetch(url, { headers: token ? { "Authorization": `Token ${token}` } : {} })

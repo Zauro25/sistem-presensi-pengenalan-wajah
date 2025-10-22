@@ -63,7 +63,7 @@ export default function Dashboard() {
             <span className="font-black text-xl tracking-wider">REKAP</span>
           </button>
                     <button
-            onClick={() => navigate("/rekap")}
+            onClick={() => navigate("/validasi-izin")}
             className="flex flex-col items-center justify-center bg-green-600 text-white rounded-2xl w-full sm:w-48 h-48 hover:bg-green-700 active:bg-green-800 active:scale-95 transition-all duration-150 shadow-lg group"
           >
             <div className="w-16 h-16 mb-3 bg-white rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-150">
