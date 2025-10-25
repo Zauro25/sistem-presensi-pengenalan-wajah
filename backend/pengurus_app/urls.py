@@ -15,7 +15,6 @@ urlpatterns = [
     path('recognize/', views.api_recognize_and_attend),
     path('rekap/', views.api_rekap),
     path('rekap/export/xlsx/', views.api_export_xlsx),
-    path('rekap/export/pdf/', views.api_export_pdf),
     path('start-absensi/', views.api_start_absensi),
     path('end-absensi/', views.api_end_absensi),
     path('start-telat/', views.api_start_telat),

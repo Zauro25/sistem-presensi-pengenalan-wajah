@@ -9,6 +9,7 @@ export default function ListIzin() {
   const [tanggal, setTanggal] = useState("");
   const [sesi, setSesi] = useState("");
   const [alasan, setAlasan] = useState("");
+  const user = JSON.parse(localStorage.getItem("user"));
 
   useEffect(() => {
     fetchData();
@@ -120,13 +121,13 @@ export default function ListIzin() {
         {/* Riwayat */}
         <div className="w-full flex flex-col items-center">
           <h3 className="font-bold text-xl mb-4">Riwayat Izin</h3>
+          <p className="font-semibold text-xl">Nama: <strong>{user?.nama_lengkap || user?.username}</strong></p>
           {riwayatIzin.length === 0 ? (
             <p className="text-gray-700">Belum ada riwayat izin.</p>
           ) : (
             <table className="table-auto w-full border border-gray-400 text-sm">
               <thead className="bg-gray-400">
                 <tr>
-                  <th className="border border-gray-500 px-2 py-1">Santri</th>
                   <th className="border border-gray-500 px-2 py-1">Tanggal</th>
                   <th className="border border-gray-500 px-2 py-1">Sesi</th>
                   <th className="border border-gray-500 px-2 py-1">Kelas</th>
@@ -137,9 +138,6 @@ export default function ListIzin() {
               <tbody>
                 {riwayatIzin.map((it) => (
                   <tr key={it.id} className="text-center">
-                    <td className="border border-gray-500 px-2 py-1">
-                      {it.santri?.santri_id} - {it.santri?.nama}
-                    </td>
                     <td className="border border-gray-500 px-2 py-1">{it.tanggal}</td>
                     <td className="border border-gray-500 px-2 py-1">{it.sesi}</td>
                     <td className="border border-gray-500 px-2 py-1">{it.kelas || "-"}</td>

@@ -11,6 +11,7 @@ export default function RegisterWajah() {
   const [isRegistered, setIsRegistered] = useState(false)
 
   useEffect(() => {
+    
     if (mode === "kamera") startCamera();
     else stopCamera();
     return () => stopCamera();
@@ -137,7 +138,7 @@ export default function RegisterWajah() {
 
     ctx.fillStyle = "lime";
     ctx.font = "16px Arial";
-    ctx.fillText(`${nama} - ${sektor}`, scaledLeft + 5, scaledTop - 10);
+    ctx.fillText(`${nama}`, scaledLeft + 5, scaledTop - 10);
   };
 
   const uploadManual = async (e) => {

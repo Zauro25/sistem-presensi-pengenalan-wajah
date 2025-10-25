@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from django.utils import timezone
 from .models import Santri, Absensi, SuratIzin
 from .serializers import SantriSerializer, AbsensiSerializer, SuratIzinSerializer, UserSerializer, RegisterSantriAccountSerializer
+from .models import Santri
 from .face_utils import decode_base64_image, recognize_from_image_pil, encode_face_from_image
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
@@ -13,11 +14,12 @@ from django.core.cache import cache
 import datetime
 import pandas as pd
 from io import BytesIO
-from django.http import HttpResponse
-from reportlab.pdfgen import canvas
+from django.http import HttpResponse, HttpRequest
 import numpy as np
 import face_recognition
 from django.db import IntegrityError
+from openpyxl.styles import Alignment, Font, PatternFill
+from .utils import get_rekap_data
 
 
 
@@ -79,16 +81,13 @@ def list_izin_santri(request):
 @permission_classes([IsAuthenticated])
 def list_permohonan_izin(request):
     user = request.user
+    
     if user.is_staff:
         izin = SuratIzin.objects.filter(status="Menunggu").select_related('santri').order_by('-tanggal')
     else:
-        try:
-            santri = Santri.objects.get(user=user)
-            izin = SuratIzin.objects.filter(santri=santri).select_related('santri').order_by('-tanggal')
-        except Santri.DoesNotExist:
-            return Response({"ok": False, "message": "Data santri tidak ditemukan"}, status=404)
-    if hasattr(user, 'role') and user.role.lower() == 'pengurus':
-        izin = izin.filter(status="Menunggu")
+        santri = Santri.objects.get(user=user)
+        izin = SuratIzin.objects.filter(santri=santri).select_related('santri').order_by('-tanggal')
+
     data = [{
         "id": i.id,
         "santri_id": i.santri.santri_id,
@@ -269,7 +268,6 @@ def api_santri_registrasi_wajah(request):
             "ok": True,
             "message": f"Wajah {santri.nama} berhasil diregistrasi!",
             "nama": santri.nama,
-            "sektor": santri.sektor,
             "location": {"top": top, "right": right, "bottom": bottom, "left": left}
         })
 
@@ -322,11 +320,6 @@ def api_santri_upload_foto(request):
         traceback.print_exc()
         return Response({"error": f"Error proses wajah: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
-
-# ======================================================
-# ABSENSI PENGURUS VIA KAMERA
-# ======================================================
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def api_start_absensi(request):
@@ -429,71 +422,15 @@ def api_recognize_and_attend(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_rekap(request):
-    # params: start (YYYY-MM-DD), end (YYYY-MM-DD)
     start = request.GET.get('start')
     end = request.GET.get('end')
-    kelas_filter = request.GET.get('kelas')
     if not start or not end:
         return Response({'ok': False, 'message': 'start & end required'}, status=400)
-    try:
-        start_dt = datetime.datetime.fromisoformat(start).date()
-        end_dt = datetime.datetime.fromisoformat(end).date()
-    except:
-        return Response({'ok': False, 'message': 'Format date salah'}, status=400)
-    # buat list tanggal+sesi (urut)
-    all_dates = []
-    d = start_dt
-    while d <= end_dt:
-        all_dates.append(d)
-        d += datetime.timedelta(days=1)
-    sesi_list = ['Subuh','Sore','Malam']
-    headers = []
-    for dt in all_dates:
-        for ss in sesi_list:
-            headers.append({'tanggal': dt.isoformat(), 'sesi': ss, 'col_key': f"{dt.isoformat()}_{ss}"})
-    if kelas_filter:
-        santri_ids = Absensi.objects.filter(kelas=kelas_filter).values_list('santri_id', flat=True).distinct()
-        santri_queryset = Santri.objects.filter(id__in=santri_ids)
-    else:
-        santri_queryset = Santri.objects.all()
+    
+    from .utils import get_rekap_data
+    data = get_rekap_data(start, end)
+    return Response(data)
 
-    # group santri by gender
-    santri_putra = santri_queryset.filter(jenis_kelamin='L').order_by('nama')
-    santri_putri = santri_queryset.filter(jenis_kelamin='P').order_by('nama')
-
-    def build_table(santri_queryset):
-        rows = []
-        for s in santri_queryset:
-            row = {'santri_id': s.santri_id, 'nama': s.nama}
-            for h in headers:
-                a = Absensi.objects.filter(santri=s, tanggal=h['tanggal'], sesi=h['sesi'])
-                if kelas_filter:
-                    a = a.filter(kelas=kelas_filter)
-                a = a.first()
-
-                if a:
-                    row[h['col_key']] = a.status
-                else:
-                    izin = SuratIzin.objects.filter(
-                        santri=s,
-                        tanggal=h['tanggal'],
-                        sesi=h['sesi'],
-                        status='Disetujui'
-                    ).first()
-                    if izin:
-                        row[h['col_key']] = 'Izin'
-                    else:
-                        row[h['col_key']] = 'Alfa'
-            rows.append(row)
-        return rows
-
-    putra_rows = build_table(santri_putra)
-    putri_rows = build_table(santri_putri)
-
-    return Response({'ok': True, 'headers': headers, 'putra': putra_rows, 'putri': putri_rows})
-
-
-# EXPORT XLSX (sheet putra & putri)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_export_xlsx(request):
@@ -501,62 +438,51 @@ def api_export_xlsx(request):
     end = request.GET.get('end')
     if not start or not end:
         return Response({'ok': False, 'message': 'start & end required'}, status=400)
-    # reuse api_rekap logic
-    resp = api_rekap(request)
-    if resp.status_code != 200:
-        return resp
-    data = resp.data
+
+    data = get_rekap_data(start, end)
     headers = data['headers']
     putra = data['putra']
     putri = data['putri']
 
-    # build DataFrame for each
-    cols = ['santri_id','nama'] + [h['col_key'] for h in headers]
-    df_putra = pd.DataFrame([{**{k:v for k,v in r.items() if k in ['santri_id','nama']}, **{h['col_key']: r[h['col_key']] for h in headers}} for r in putra])
-    df_putri = pd.DataFrame([{**{k:v for k,v in r.items() if k in ['santri_id','nama']}, **{h['col_key']: r[h['col_key']] for h in headers}} for r in putri])
+    cols = ['Nama'] + [h['col_key'] for h in headers]
+    df_putra = pd.DataFrame(putra)[cols]
+    df_putri = pd.DataFrame(putri)[cols]
 
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df_putra.to_excel(writer, index=False, sheet_name='Putra')
-        df_putri.to_excel(writer, index=False, sheet_name='Putri')
+        for name, df in [("Putra", df_putra), ("Putri", df_putri)]:
+            df.to_excel(writer, index=False, sheet_name=name)
+
+            ws = writer.sheets[name]
+            alignment = Alignment(horizontal="center", vertical="center")
+            font_bold = Font(bold=True)
+            # header style
+            for cell in ws[1]:
+                cell.font = font_bold
+                cell.alignment = alignment
+
+            # warna per status
+            fill_colors = {
+                "Hadir": "C6EFCE",
+                "T1": "FFF2CC", 
+                "T2": "FFE699",
+                "T3": "FFD966",
+                "Izin": "C9DAF8",  
+                "-": "F4CCCC"     
+            }
+
+            for row in ws.iter_rows(min_row=2, min_col=2):
+                for cell in row:
+                    val = str(cell.value)
+                    if val in fill_colors:
+                        cell.fill = PatternFill(start_color=fill_colors[val], end_color=fill_colors[val], fill_type="solid")
+                    cell.alignment = alignment
+
+            for column_cells in ws.columns:
+                length = max(len(str(cell.value)) if cell.value else 0 for cell in column_cells)
+                ws.column_dimensions[column_cells[0].column_letter].width = length + 2
+
     output.seek(0)
     response = HttpResponse(output.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = 'attachment; filename=rekap_absensi.xlsx'
     return response
-
-# EXPORT PDF (simple) - combines putra & putri pages
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def api_export_pdf(request):
-    start = request.GET.get('start')
-    end = request.GET.get('end')
-    resp = api_rekap(request)
-    if resp.status_code != 200:
-        return resp
-    data = resp.data
-    headers = data['headers']
-    putra = data['putra']
-    putri = data['putri']
-
-    buffer = BytesIO()
-    p = canvas.Canvas(buffer)
-    p.setFont("Helvetica", 10)
-    y = 800
-    def draw_section(title, rows):
-        nonlocal p, y
-        p.drawString(50, y, title); y -= 20
-        # header
-        header_line = "Nama".ljust(30) + " | " + " | ".join([h['col_key'] for h in headers])
-        p.drawString(50, y, header_line); y -= 15
-        for r in rows:
-            line = f"{r['nama']}".ljust(30) + " | " + " | ".join([str(r[h['col_key']]) for h in headers])
-            if y < 50:
-                p.showPage(); y = 800
-            p.drawString(50, y, line); y -= 12
-        y -= 20
-
-    draw_section("Putra", putra)
-    draw_section("Putri", putri)
-    p.save()
-    buffer.seek(0)
-    return HttpResponse(buffer, content_type='application/pdf')

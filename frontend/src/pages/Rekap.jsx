@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { rekap, exportXLSX, exportPDF } from "../services/api";
+import { rekap, exportXLSX} from "../services/api";
 
 export default function Rekap() {
   const [start, setStart] = useState("");
@@ -76,22 +76,6 @@ const doRekap = async () => {
         {/* Kalau data ada */}
         {data && data.ok && (
           <div className="mt-10 text-left overflow-x-auto">
-            {/* Tombol export */}
-            <div className="flex gap-4 mb-6">
-              <button
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700"
-                onClick={() => exportXLSX(start, end)}
-              >
-                Export XLSX
-              </button>
-              <button
-                className="bg-gray-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-gray-700"
-                onClick={() => exportPDF(start, end)}
-              >
-                Export PDF
-              </button>
-            </div>
-
             {/* Tabel Putra */}
             <h2 className="text-xl font-bold mb-2">Putra</h2>
             <table className="table-auto border-collapse border border-gray-500 w-full text-sm mb-6">
@@ -161,6 +145,15 @@ const doRekap = async () => {
                 ))}
               </tbody>
             </table>
+            {/* Tombol export */}
+            <div className="flex gap-4 mb-6 justify-center mt-10">
+              <button
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700"
+                onClick={() => exportXLSX(start, end)}
+              >
+                Export Laporan
+              </button>
+            </div>
           </div>
         )}
       </div>

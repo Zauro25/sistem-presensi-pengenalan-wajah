@@ -90,36 +90,18 @@ export async function rekap(start, end, kelas = "") {
 }
 
 
-export function exportXLSX(start, end, kelas) {
-  const params = new URLSearchParams({ start, end, kelas });
+export async function exportXLSX(start, end) {
   const token = localStorage.getItem("token");
-  const url = `${API_BASE}/rekap/export/xlsx/?${params.toString()}`;
-  // open with token? better open via backend; for simplicity, just open url in browser - browser won't include token header
-  // instead do fetch and create blob:
-  return fetch(url, { headers: token ? { "Authorization": `Token ${token}` } : {} })
-    .then(r => r.blob())
-    .then(blob => {
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = 'rekap_absensi.xlsx';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    });
+  const res = await fetch(`${API_BASE}/rekap/export/xlsx/?start=${start}&end=${end}`, {
+    headers: { Authorization: "Token " + token },
+  });
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "rekap_absensi.xlsx";
+  a.click();
 }
 
-export function exportPDF(start, end, kelas) {
-  const params = new URLSearchParams({ start, end, kelas });
-  const token = localStorage.getItem("token");
-  const url = `${API_BASE}/rekap/export/pdf/?${params.toString()}`;
-  return fetch(url, { headers: token ? { "Authorization": `Token ${token}` } : {} })
-    .then(r => r.blob())
-    .then(blob => {
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = 'rekap_absensi.pdf';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    });
-}
+
+
