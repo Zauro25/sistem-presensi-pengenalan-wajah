@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+.env.*
+.venv/
+venv/
+ENV/
+env/
+.pytest_cache/
+.coverage*
+dist/
+build/
+site/
+*.egg-info/
+.DS_Store
+
+# Django
+staticfiles/
+media/
+local_settings.py
+
+# Logs
+logs/
+*.log
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Node
+node_modules/
+.npm/
+.pnpm-store/
+.cache/
+yarn.lock
+package-lock.json
+
+# Vite/Build
+frontend/dist/
+frontend/.vite/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+
+# Misc
+coverage/
+**/.DS_Store

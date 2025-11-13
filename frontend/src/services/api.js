@@ -81,7 +81,7 @@ export async function rekap(start, end, kelas = "") {
   const url = new URL("http://127.0.0.1:8000/api/rekap/");
   url.searchParams.append("start", start);
   url.searchParams.append("end", end);
-  if (kelas) url.searchParams.append("kelas", kelas); // kirim kelas kalau dipilih
+  if (kelas) url.searchParams.append("kelas", kelas);
 
   const res = await fetch(url, {
     headers: { Authorization: "Token " + token },

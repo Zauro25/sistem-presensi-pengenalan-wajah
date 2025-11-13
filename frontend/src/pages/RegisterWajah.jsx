@@ -1,4 +1,6 @@
 import React, { useRef, useEffect, useState } from "react";
+import { apiClient } from "../services/apiClient";
+import Sidebar from "../components/Sidebar";
 
 export default function RegisterWajah() {
   const [mode, setMode] = useState("idle");
@@ -8,7 +10,20 @@ export default function RegisterWajah() {
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
   const streamRef = useRef(null);
-  const [isRegistered, setIsRegistered] = useState(false)
+  const [isRegistered, setIsRegistered] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Dark mode detection
+  const [isDarkMode, setIsDarkMode] = useState(
+    window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+  );
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = (e) => setIsDarkMode(e.matches);
+    mediaQuery.addEventListener('change', handler);
+    return () => mediaQuery.removeEventListener('change', handler);
+  }, []);
 
   useEffect(() => {
     
@@ -49,7 +64,6 @@ export default function RegisterWajah() {
     if (videoRef.current) videoRef.current.srcObject = null;
   };
 
-  // Looping real-time pakai requestAnimationFrame
   const detectLoop = async () => {
     await captureAndSend();
     animationRef.current = requestAnimationFrame(detectLoop);
@@ -78,27 +92,14 @@ export default function RegisterWajah() {
     const dataURL = canvas.toDataURL("image/jpeg");
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/santri/registrasi-wajah/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Token " + token,
-        },
-        body: JSON.stringify({ santri_id: santriId, image: dataURL }),
-      });
-
-      const data = await res.json();
-      console.log("DEBUG >> response:", data);
-
-      if (res.ok && data.location) {
+      const { data } = await apiClient.legacy.registerWajah(santriId, dataURL);
+      if (data && data.location) {
         drawBox(data.location, data.nama, data.sektor);
         setMsg(`✅ Wajah ${data.nama} berhasil diregistrasi!`);
         return;
-      } else {
-        setMsg("🔍 Mendeteksi wajah...");
       }
+      setMsg("🔍 Mendeteksi wajah...");
     } catch (err) {
-      console.error("Error koneksi:", err);
       setMsg("Error koneksi ke server.");
     }
   };
@@ -110,11 +111,9 @@ export default function RegisterWajah() {
 
     const ctx = canvas.getContext("2d");
 
-    // ukuran asli video dari kamera
     const videoWidth = video.videoWidth;
     const videoHeight = video.videoHeight;
 
-    // ukuran tampilan di layar
     const displayWidth = video.clientWidth;
     const displayHeight = video.clientHeight;
 
@@ -157,27 +156,25 @@ export default function RegisterWajah() {
     formData.append("foto", file);
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/santri/upload-foto/", {
-        method: "POST",
-        headers: { Authorization: "Token " + token },
-        body: formData,
-      });
-
-      const data = await res.json();
-      if (res.ok) {
-        setMsg("Foto berhasil diupload & wajah terdeteksi!");
-      } else {
-        setMsg("Error " + (data.error || data.message));
-      }
+      const { data } = await apiClient.legacy.uploadFoto(formData);
+      if (data?.success) setMsg("Foto berhasil diupload & wajah terdeteksi!");
+      else setMsg("Error " + (data?.error || data?.message || ""));
     } catch (err) {
       setMsg("Error koneksi: " + err.message);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4">
-      <div className="bg-gray-300 rounded-3xl shadow-lg p-6 w-[90%] max-w-4xl flex flex-col items-center">
-        <h3 className="text-gray-800 mb-6 font-bold text-2xl">
+    <div className={`min-h-screen ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
+      <Sidebar 
+        isDarkMode={isDarkMode} 
+        sidebarOpen={sidebarOpen} 
+        setSidebarOpen={setSidebarOpen}
+        role="santri"
+      />
+      <div className="md:ml-64 flex flex-col items-center justify-center p-4 min-h-screen">
+        <div className={`rounded-3xl shadow-lg p-6 w-[90%] max-w-4xl flex flex-col items-center ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
+        <h3 className={`mb-6 font-bold text-2xl ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
           Registrasi Wajah Santri
         </h3>
 
@@ -225,7 +222,7 @@ export default function RegisterWajah() {
                 pointerEvents: "none",
               }}
             />
-            <p className="text-gray-700 font-semibold mt-3">
+            <p className={`font-semibold mt-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
               Kamera aktif — sistem akan otomatis deteksi & simpan wajahmu
             </p>
           </div>
@@ -236,7 +233,7 @@ export default function RegisterWajah() {
             <input
               type="file"
               accept="image/*"
-              className="mb-3"
+              className={`mb-3 ${isDarkMode ? 'text-gray-200' : 'text-gray-900'}`}
               onChange={(e) => setFile(e.target.files[0])}
             />
             <button className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-3 rounded-lg font-bold active:scale-95 transition-transform">
@@ -246,10 +243,11 @@ export default function RegisterWajah() {
         )}
 
         {msg && (
-          <div className="mt-4 font-semibold text-gray-800 text-center">
+          <div className={`mt-4 font-semibold text-center ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
             {msg}
           </div>
         )}
+        </div>
       </div>
     </div>
   );

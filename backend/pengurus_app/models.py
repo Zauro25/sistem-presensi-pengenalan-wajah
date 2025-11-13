@@ -3,7 +3,6 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 
 def santri_photo_upload_path(instance, filename):
-    # auto rename file: SANTRI_<santri_id>_<timestamp>.jpg
     ext = filename.split('.')[-1]
     filename = f"SANTRI_{instance.santri_id}_{int(timezone.now().timestamp())}.{ext}"
     return f"santri_photos/{filename}"

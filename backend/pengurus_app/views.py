@@ -53,11 +53,9 @@ class StartTelatView(APIView):
 ABSENSI_KEY = "absensi_start_time"
 TELAT_KEY = "telat_start_time"
 
-# Surat Izin
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def api_permohonan_izin(request):
-    # expected: santri_pk, tanggal (YYYY-MM-DD), sesi, alasan
     santri_pk = request.data.get('santri_pk')
     tanggal = request.data.get('tanggal')
     sesi = request.data.get('sesi')
@@ -108,7 +106,7 @@ def validasi_izin(request, izin_id):
     except SuratIzin.DoesNotExist:
         return Response({'ok': False, 'message': 'Izin tidak ditemukan'}, status=404)
 
-    action = request.data.get('status')  # “Disetujui” atau “Ditolak”
+    action = request.data.get('status')
     if action not in ['Disetujui', 'Ditolak']:
         return Response({'ok': False, 'message': 'Status tidak valid'}, status=400)
 
@@ -118,14 +116,12 @@ def validasi_izin(request, izin_id):
     return Response({'ok': True, 'message': f'Izin {action} berhasil'})
 
 
-# LIST SANTRI
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_list_santri(request):
     santris = Santri.objects.all().order_by('santri_id')
     return Response({'ok': True, 'data': SantriSerializer(santris, many=True).data})
 
-#GET USER
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_get_user(request):
@@ -160,9 +156,6 @@ def api_permohonan_izin(request):
         return Response({'ok': False, 'message': 'Sudah ada surat izin untuk santri ini pada tanggal & sesi tersebut'}, status=400)
     return Response({'ok': True, 'surat': SuratIzinSerializer(si).data})
 
-# ======================================================
-# REGISTER AKUN PENGURUS & SANTRI
-# ======================================================
 
 class RegisterPengurusView(generics.CreateAPIView):
     queryset = User.objects.all()
@@ -190,9 +183,6 @@ class RegisterSantriView(generics.CreateAPIView):
             "role": "santri"
         })
 
-# ======================================================
-# LOGIN
-# ======================================================
 class LoginPengurusView(APIView):
     permission_classes = [AllowAny]
 
@@ -200,21 +190,34 @@ class LoginPengurusView(APIView):
         from django.contrib.auth import authenticate
         username = request.data.get("username")
         password = request.data.get("password")
+        
+        print(f"Login attempt for username: {username}")
+        
+        if not username or not password:
+            print("Missing username or password")
+            return Response({"error": "Username dan password harus diisi"}, status=400)
+        
         user = authenticate(username=username, password=password)
         if not user:
-            return Response({"error": "Invalid Credentials"}, status=401)
+            print(f"Authentication failed for username: {username}")
+            return Response({"error": "Username atau password salah"}, status=401)
 
         token, _ = Token.objects.get_or_create(user=user)
         role = "pengurus" if user.is_staff else "santri"
-        santri_name = getattr(user, "santri_profile", None)
+        santri_profile = getattr(user, "santri_profile", None)
+        
+        print(f"Login successful for {username} (role: {role})")
+        
         return Response({
             "token": token.key,
             "role": role,
             "user": {
                 "id": user.id,
                 "username": user.username,
-                "nama_lengkap": santri_name.nama if santri_name else None,
-                "santri_id": santri_name.id if santri_name else None
+                "nama_lengkap": santri_profile.nama if santri_profile else None,
+                "santri_id": santri_profile.id if santri_profile else None,
+                "sektor": santri_profile.sektor if santri_profile else None,
+                "angkatan": santri_profile.angkatan if santri_profile else None
             }
         })
 
@@ -229,7 +232,6 @@ def api_santri_registrasi_wajah(request):
         santri_id = request.data.get("santri_id")
         image_data = request.data.get("image")
 
-        # ✅ Validasi awal
         if not santri_id or not image_data:
             return Response(
                 {"error": "santri_id dan image wajib diisi"},
@@ -261,7 +263,6 @@ def api_santri_registrasi_wajah(request):
         santri.face_encoding = face_encodings[0].tolist()
         santri.save()
 
-        # Ambil lokasi wajah pertama
         top, right, bottom, left = face_locations[0]
 
         return Response({
@@ -287,17 +288,14 @@ def api_santri_upload_foto(request):
         if not santri_id or not foto_file:
             return Response({"error": "santri_id dan foto wajib diisi"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # ambil santri
         try:
             santri = Santri.objects.get(id=santri_id)
         except Santri.DoesNotExist:
             return Response({"error": "Santri tidak ditemukan"}, status=status.HTTP_404_NOT_FOUND)
 
-        # simpan file foto dulu
         santri.foto = foto_file
         santri.save()
 
-        # 🔥 load file langsung dengan face_recognition (lebih aman daripada np.array(PIL.Image))
         img_path = santri.foto.path
         print("DEBUG >> proses file:", img_path)
 
@@ -309,7 +307,6 @@ def api_santri_upload_foto(request):
         if len(encs) == 0:
             return Response({"error": "Wajah tidak terdeteksi, coba gunakan foto yang lebih jelas"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # simpan encoding ke DB
         santri.face_encoding = encs[0].tolist()
         santri.save()
 
@@ -361,74 +358,84 @@ def api_end_absensi(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def api_recognize_and_attend(request):
-    data_url = request.data.get('image')
-    absensi_info = cache.get(ABSENSI_KEY)
-    kelas = request.data.get("kelas") or "Kamu kelas apa?"
-    print(absensi_info)
+    try:
+        data_url = request.data.get('image')
+        if not data_url:
+            return Response({"ok": False, "message": "Image data tidak ditemukan"}, status=400)
+            
+        absensi_info = cache.get(ABSENSI_KEY)
+        kelas = request.data.get("kelas") or "Kamu kelas apa?"
+        print(absensi_info)
 
-    if not absensi_info:
-        return Response({"ok": False, "message": "Absensi belum dimulai"}, status=400)
+        if not absensi_info:
+            return Response({"ok": False, "message": "Absensi belum dimulai"}, status=400)
 
-    tanggal = absensi_info['tanggal']
-    sesi = absensi_info['sesi']
-    telat_start = absensi_info.get('telat_start')
+        tanggal = absensi_info['tanggal']
+        sesi = absensi_info['sesi']
+        telat_start = absensi_info.get('telat_start')
 
-    pil_img = decode_base64_image(data_url)
-    santri, info, location = recognize_from_image_pil(pil_img, tolerance=0.45)
-    if not santri:
-        return Response({"ok": False, "message": "Wajah tidak cocok"}, status=404)
+        pil_img = decode_base64_image(data_url)
+        santri, info, location = recognize_from_image_pil(pil_img, tolerance=0.45)
+        if not santri:
+            return Response({"ok": False, "message": "Wajah tidak cocok"}, status=404)
 
-    status_absensi = "Hadir"
-    if telat_start:
-        try:
-            telat_dt = datetime.datetime.fromisoformat(telat_start)
-            if timezone.is_naive(telat_dt):
-                telat_dt = timezone.make_aware(telat_dt)
-            diff = (timezone.now() - telat_dt).total_seconds() / 60
-            if diff <= 5:
-                status_absensi = "T1"
-            elif diff <= 15:
-                status_absensi = "T2"
-            else:
-                status_absensi = "T3"
-        except Exception as e:
-            print("TELAT ERROR:", e)
+        status_absensi = "Hadir"
+        if telat_start:
+            try:
+                telat_dt = datetime.datetime.fromisoformat(telat_start)
+                if timezone.is_naive(telat_dt):
+                    telat_dt = timezone.make_aware(telat_dt)
+                diff = (timezone.now() - telat_dt).total_seconds() / 60
+                if diff <= 5:
+                    status_absensi = "T1"
+                elif diff <= 15:
+                    status_absensi = "T2"
+                else:
+                    status_absensi = "T3"
+            except Exception as e:
+                print("TELAT ERROR:", e)
 
-    Absensi.objects.update_or_create(
-        santri=santri,
-        tanggal=tanggal,
-        sesi=sesi,
-        kelas=kelas,
-        defaults={
-            "status": status_absensi,
+        Absensi.objects.update_or_create(
+            santri=santri,
+            tanggal=tanggal,
+            sesi=sesi,
+            kelas=kelas,
+            defaults={
+                "status": status_absensi,
+                "kelas": kelas,
+                "created_by": request.user
+            }
+        )
+
+        return Response({
+            "ok": True,
+            "santri": {"id": santri.id, "nama": santri.nama},
             "kelas": kelas,
-            "created_by": request.user
-        }
-    )
-
-    return Response({
-        "ok": True,
-        "santri": {"id": santri.id, "nama": santri.nama},
-        "kelas": kelas,
-        "status": status_absensi,
-        "location": {
-            "top": location[0],
-            "right": location[1],
-            "bottom": location[2],
-            "left": location[3]
-        }
-    })
+            "status": status_absensi,
+            "location": {
+                "top": location[0],
+                "right": location[1],
+                "bottom": location[2],
+                "left": location[3]
+            }
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"Error in recognize_and_attend: {str(e)}")
+        return Response({"ok": False, "message": f"Error processing: {str(e)}"}, status=500)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_rekap(request):
     start = request.GET.get('start')
     end = request.GET.get('end')
+    kelas = request.GET.get('kelas')  # Get the kelas filter parameter
     if not start or not end:
         return Response({'ok': False, 'message': 'start & end required'}, status=400)
     
     from .utils import get_rekap_data
-    data = get_rekap_data(start, end)
+    data = get_rekap_data(start, end, kelas)
     return Response(data)
 
 @api_view(['GET'])
@@ -436,10 +443,11 @@ def api_rekap(request):
 def api_export_xlsx(request):
     start = request.GET.get('start')
     end = request.GET.get('end')
+    kelas = request.GET.get('kelas')  # Get the kelas filter parameter
     if not start or not end:
         return Response({'ok': False, 'message': 'start & end required'}, status=400)
 
-    data = get_rekap_data(start, end)
+    data = get_rekap_data(start, end, kelas)
     headers = data['headers']
     putra = data['putra']
     putri = data['putri']
@@ -456,12 +464,10 @@ def api_export_xlsx(request):
             ws = writer.sheets[name]
             alignment = Alignment(horizontal="center", vertical="center")
             font_bold = Font(bold=True)
-            # header style
             for cell in ws[1]:
                 cell.font = font_bold
                 cell.alignment = alignment
 
-            # warna per status
             fill_colors = {
                 "Hadir": "C6EFCE",
                 "T1": "FFF2CC", 

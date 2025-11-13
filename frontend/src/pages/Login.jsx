@@ -1,5 +1,6 @@
-import React, { useState } from "react";
-import { login } from "../services/api";
+import React, { useState, useEffect } from "react";
+import { apiClient } from "../services/apiClient";
+import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 
 export default function Login() {
@@ -7,26 +8,37 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [msg, setMsg] = useState("");
   const navigate = useNavigate();
+  const { login: setAuth } = useAuth();
+
+  // Dark mode detection
+  const [isDarkMode, setIsDarkMode] = useState(
+    window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+  );
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = (e) => setIsDarkMode(e.matches);
+    mediaQuery.addEventListener('change', handler);
+    return () => mediaQuery.removeEventListener('change', handler);
+  }, []);
 
   const submit = async (e) => {
     e.preventDefault();
     setMsg("Sedang login...");
 
     try {
-      const res = await login(username, password);
+      const { data: res } = await apiClient.auth.login(username, password);
+      console.log("Login response:", res);
 
-      if (res.token) {
+      if (res?.token) {
         const userData = {
-          token: res.token,
           role: res.role || (res.user?.is_staff ? "pengurus" : "santri"),
           username: res.user?.username || username,
           nama_lengkap: res.user?.nama_lengkap,
           santri_id: res.user?.santri_id,
           id: res.user?.id,
         };
-
-        localStorage.setItem("user", JSON.stringify(userData));
-        localStorage.setItem("token", res.token)
+        setAuth(userData, res.token);
         setMsg("Login sukses!");
 
         if (userData.role === "pengurus") {
@@ -37,18 +49,22 @@ export default function Login() {
           navigate("/");
         }
       } else {
-        setMsg("Gagal login: " + (res.error || res.message || "Unknown error"));
+        const errorMsg = res.error || res.detail || res.message || "Respons tidak valid";
+        console.error("Login failed:", res);
+        setMsg("Gagal login: " + errorMsg);
       }
     } catch (err) {
-      setMsg("Error koneksi: " + err.message);
+      console.error("Login error:", err);
+      const errorMsg = err.response?.data?.error || err.response?.data?.detail || err.message;
+      setMsg("Error koneksi: " + errorMsg);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
-      <div className="bg-gray-400 p-10 rounded-2xl w-screen max-w-md shadow-lg text-center">
-        <h2 className="font-bold mb-1 text-4xl">SISTEM ABSENSI</h2>
-        <h4 className="mb-5 text-3xl">PPM JOGJA</h4>
+    <div className={`min-h-screen flex items-center justify-center p-4 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
+      <div className={`p-10 rounded-2xl w-screen max-w-md shadow-lg text-center ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
+        <h2 className={`font-bold mb-1 text-4xl ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>SISTEM ABSENSI</h2>
+        <h4 className={`mb-5 text-3xl ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>PPM JOGJA</h4>
 
         <form onSubmit={submit}>
           <div className="mb-4">
@@ -57,7 +73,7 @@ export default function Login() {
               placeholder="Username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 outline-none bg-white text-black"
+              className={`w-full px-3 py-2 rounded-lg border outline-none ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-200 placeholder-gray-400' : 'bg-white border-gray-300 text-black'}`}
             />
           </div>
           <div className="mb-4">
@@ -66,7 +82,7 @@ export default function Login() {
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 outline-none bg-white text-black"
+              className={`w-full px-3 py-2 rounded-lg border outline-none ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-200 placeholder-gray-400' : 'bg-white border-gray-300 text-black'}`}
             />
           </div>
           <button
@@ -80,14 +96,14 @@ export default function Login() {
         <div className="mt-4">
           <button
             onClick={() => navigate("/register")}
-            className="bg-transparent border-none text-blue-700 hover:text-white transition-all duration-150 cursor-pointer text-sm underline"
+            className={`bg-transparent border-none hover:underline transition-all duration-150 cursor-pointer text-sm ${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-700 hover:text-blue-600'}`}
           >
             Belum punya akun? Registrasi disini
           </button>
         </div>
 
         {msg && (
-          <div className="mt-4 text-sm bg-white p-2 rounded-lg">
+          <div className={`mt-4 text-sm p-2 rounded-lg ${isDarkMode ? 'bg-gray-700 text-gray-200' : 'bg-gray-100 text-gray-800'}`}>
             {msg}
           </div>
         )}

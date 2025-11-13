@@ -5,6 +5,7 @@ urlpatterns = [
     path("register-pengurus/", views.RegisterPengurusView.as_view(), name="register-pengurus"),
     path("register-santri/", views.RegisterSantriView.as_view(), name="register-santri"),
     path("login-token/", views.LoginPengurusView.as_view(), name="login-token"),
+    path("users/token/", views.LoginPengurusView.as_view(), name="users-token"),
     path('santri/', views.api_list_santri),
     path('santri/upload-foto/', views.api_santri_upload_foto, name="santri-upload-foto"),
     path("santri/izin/", views.api_permohonan_izin, name="api_permohonan_izin"),

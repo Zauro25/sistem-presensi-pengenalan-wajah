@@ -1,0 +1,13 @@
+[Unit]
+Description=Absensi Backend
+After=network.target
+
+[Service]
+User=www-data
+WorkingDirectory=/opt/absensi/backend
+EnvironmentFile=/opt/absensi/backend/.env
+ExecStart=/opt/absensi/venv/bin/gunicorn backend.wsgi:application --bind 0.0.0.0:8000
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

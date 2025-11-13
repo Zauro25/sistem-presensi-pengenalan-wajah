@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 export default function RegisterSantri() {
@@ -13,6 +13,18 @@ export default function RegisterSantri() {
     jenis_kelamin: "L"
   });
   const [msg, setMsg] = useState("");
+
+  // Dark mode detection
+  const [isDarkMode, setIsDarkMode] = useState(
+    window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+  );
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = (e) => setIsDarkMode(e.matches);
+    mediaQuery.addEventListener('change', handler);
+    return () => mediaQuery.removeEventListener('change', handler);
+  }, []);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -37,29 +49,29 @@ export default function RegisterSantri() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4">
-      <h3 className="text-white font-bold text-2xl md:text-3xl mb-6 text-center">
+    <div className={`min-h-screen flex flex-col items-center justify-center p-4 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
+      <h3 className={`font-bold text-2xl md:text-3xl mb-6 text-center ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
         Register Akun Santri
       </h3>
       
-      <div className="w-full max-w-md bg-gray-400 p-6 rounded-lg shadow-lg">
+      <div className={`w-full max-w-md p-6 rounded-lg shadow-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
         <form onSubmit={submit} className="space-y-4">
           <input
             placeholder="Nama Lengkap"
-            className="w-full px-3 py-2 rounded-lg border border-gray-300 outline-none bg-white text-black"
+            className={`w-full px-3 py-2 rounded-lg border outline-none ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-200 placeholder-gray-400' : 'bg-white border-gray-300 text-black'}`}
             value={form.nama}
             onChange={(e) => setForm({ ...form, nama: e.target.value })}
             required
           />
           <input
             placeholder="Asal Daerah"
-            className="w-full px-3 py-2 rounded-lg border border-gray-300 outline-none bg-white text-black"
+            className={`w-full px-3 py-2 rounded-lg border outline-none ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-200 placeholder-gray-400' : 'bg-white border-gray-300 text-black'}`}
             value={form.asal_daerah}
             onChange={(e) => setForm({ ...form, asal_daerah: e.target.value })}
             required
           />
           <select
-            className="w-full px-3 py-2 rounded-lg border border-gray-300 outline-none bg-white text-black"
+            className={`w-full px-3 py-2 rounded-lg border outline-none ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-200' : 'bg-white border-gray-300 text-black'}`}
             value={form.sektor}
             onChange={(e) => setForm({ ...form, sektor: e.target.value })}
           >
@@ -68,13 +80,13 @@ export default function RegisterSantri() {
           </select>
           <input
             placeholder="Angkatan"
-            className="w-full px-3 py-2 rounded-lg border border-gray-300 outline-none bg-white text-black"
+            className={`w-full px-3 py-2 rounded-lg border outline-none ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-200 placeholder-gray-400' : 'bg-white border-gray-300 text-black'}`}
             value={form.angkatan}
             onChange={(e) => setForm({ ...form, angkatan: e.target.value })}
             required
           />
           <select
-            className="w-full px-3 py-2 rounded-lg border border-gray-300 outline-none bg-white text-black"
+            className={`w-full px-3 py-2 rounded-lg border outline-none ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-200' : 'bg-white border-gray-300 text-black'}`}
             value={form.jenis_kelamin}
             onChange={(e) => setForm({ ...form, jenis_kelamin: e.target.value })}
           >
@@ -83,7 +95,7 @@ export default function RegisterSantri() {
           </select>
           <input
             placeholder="Username"
-            className="w-full px-3 py-2 rounded-lg border border-gray-300 outline-none bg-white text-black"
+            className={`w-full px-3 py-2 rounded-lg border outline-none ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-200 placeholder-gray-400' : 'bg-white border-gray-300 text-black'}`}
             value={form.username}
             onChange={(e) => setForm({ ...form, username: e.target.value })}
             required
@@ -91,7 +103,7 @@ export default function RegisterSantri() {
           <input
             type="password"
             placeholder="Password"
-            className="w-full px-3 py-2 rounded-lg border border-gray-300 outline-none bg-white text-black"
+            className={`w-full px-3 py-2 rounded-lg border outline-none ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-200 placeholder-gray-400' : 'bg-white border-gray-300 text-black'}`}
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
             required
@@ -105,7 +117,7 @@ export default function RegisterSantri() {
         </form>
         
         {msg && (
-          <div className="mt-4 p-3 bg-white rounded-lg text-sm text-center">
+          <div className={`mt-4 p-3 rounded-lg text-sm text-center ${isDarkMode ? 'bg-gray-700 text-gray-200' : 'bg-gray-100 text-gray-800'}`}>
             {msg}
           </div>
         )}

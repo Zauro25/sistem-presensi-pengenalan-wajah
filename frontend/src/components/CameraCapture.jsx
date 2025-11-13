@@ -14,14 +14,33 @@ export default function CameraCapture({ onCapture, active }) {
 
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      console.log("Requesting camera access...");
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          facingMode: "user",
+          width: { ideal: 640 },
+          height: { ideal: 480 }
+        } 
+      });
+      console.log("Camera access granted");
       streamRef.current = stream;
-      videoRef.current.srcObject = stream;
-      await videoRef.current.play();
-      loopDetect();
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+        console.log("Camera started successfully");
+        loopDetect();
+      }
     } catch (e) {
-      console.error(e);
-      alert("Gagal mengakses kamera");
+      console.error("Camera error:", e);
+      let errorMsg = "Gagal mengakses kamera";
+      if (e.name === "NotAllowedError") {
+        errorMsg = "Izin kamera ditolak. Silakan berikan izin kamera di browser.";
+      } else if (e.name === "NotFoundError") {
+        errorMsg = "Kamera tidak ditemukan pada perangkat ini.";
+      } else if (e.name === "NotReadableError") {
+        errorMsg = "Kamera sedang digunakan aplikasi lain.";
+      }
+      alert(errorMsg);
     }
   };
 
@@ -41,8 +60,15 @@ export default function CameraCapture({ onCapture, active }) {
   };
 
   const captureFrame = async () => {
-    if (!videoRef.current) return null;
+    if (!videoRef.current) {
+      console.log("Video element not ready");
+      return null;
+    }
     const video = videoRef.current;
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      console.log("Video dimensions not ready");
+      return null;
+    }
     const tempCanvas = document.createElement("canvas");
     tempCanvas.width = video.videoWidth;
     tempCanvas.height = video.videoHeight;
@@ -71,7 +97,6 @@ export default function CameraCapture({ onCapture, active }) {
     const scaleX = displayWidth / videoWidth;
     const scaleY = displayHeight / videoHeight;
 
-    // ❌ Jangan dibalik lagi! karena preview video udah di-flip
     const boxWidth = (right - left) * scaleX;
     const boxHeight = (bottom - top) * scaleY;
     const scaledLeft = left * scaleX;

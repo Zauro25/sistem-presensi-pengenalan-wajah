@@ -55,7 +55,7 @@ class UserSerializer(serializers.ModelSerializer):
 class SantriSerializer(serializers.ModelSerializer):
     class Meta:
         model = Santri
-        fields = ['id','santri_id','nama','jenis_kelamin','foto','face_encoding']
+        fields = ['id','santri_id','nama','asal_daerah','sektor','angkatan','jenis_kelamin','foto','face_encoding']
         
 
 class AbsensiSerializer(serializers.ModelSerializer):

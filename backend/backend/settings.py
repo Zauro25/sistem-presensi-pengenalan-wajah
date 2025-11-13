@@ -1,4 +1,3 @@
-# backend/backend_settings/settings.py
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -22,6 +21,8 @@ INSTALLED_APPS = [
     "django.contrib.messages", 
     "django.contrib.staticfiles",
     "rest_framework",
+    "django_filters",
+    "drf_spectacular",
     "corsheaders",
     "pengurus_app",
 ]
@@ -61,10 +62,14 @@ WSGI_APPLICATION = "backend.wsgi.application"
 DATABASES = {
     'default': dj_database_url.config(
         default=os.getenv("DATABASE_URL"),
-        conn_max_age=600,
+        conn_max_age=60,  # Reduced from 600 to 60 seconds
+        conn_health_checks=True,  # Enable connection health checks
         ssl_require=True
     )
 }
+
+# Close database connections after each request to free up pool
+CONN_MAX_AGE = 0
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",},
@@ -87,7 +92,21 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
-    ]
+    ],
+    "DEFAULT_PAGINATION_CLASS": "backend.pagination.DefaultPagination",
+    "PAGE_SIZE": 25,
+    "DEFAULT_FILTER_BACKENDS": [
+        "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.SearchFilter",
+        "rest_framework.filters.OrderingFilter",
+    ],
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Absensi PPM API",
+    "DESCRIPTION": "API untuk absensi, santri, izin, dan laporan",
+    "VERSION": "1.0.0",
 }
 
 

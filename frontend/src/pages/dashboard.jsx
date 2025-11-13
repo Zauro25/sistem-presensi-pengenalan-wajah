@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { listSantri } from "../services/api";
+import { apiClient } from "../services/apiClient";
 import { useNavigate } from "react-router-dom";
-// import icon dari src/assets
+import Sidebar from "../components/Sidebar";
 import absensiIcon from "../assets/absensi.png";
 import rekapIcon from "../assets/rekap.png";
 import izinIcon from "../assets/perizinan.png"
@@ -9,9 +9,24 @@ import izinIcon from "../assets/perizinan.png"
 export default function Dashboard() {
   const [santris, setSantris] = useState([]);
   const navigate = useNavigate();
+  const user = JSON.parse(localStorage.getItem("user"));
+
+  // Dark mode detection
+  const [isDarkMode, setIsDarkMode] = useState(
+    window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+  );
+
+  // Sidebar state (mobile collapsible)
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-    const user = JSON.parse(localStorage.getItem("user"));
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = (e) => setIsDarkMode(e.matches);
+    mediaQuery.addEventListener('change', handler);
+    return () => mediaQuery.removeEventListener('change', handler);
+  }, []);
+
+  useEffect(() => {
     if (!user) {
       navigate("/"); 
     }
@@ -19,71 +34,74 @@ export default function Dashboard() {
   }, []);
 
   async function fetchSantri() {
-    const res = await listSantri();
-    if (res.ok) {
-      setSantris(res.data);
-    }
+    const { data: res } = await apiClient.santri.list();
+    if (res?.ok) setSantris(res.data);
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
-      <div className="bg-gray-300 rounded-2xl shadow-2xl w-full max-w-2xl p-12 flex flex-col items-center">
-        
-        {/* Judul */}
-        <div className="text-center mb-10">
-          <h1 className="text-3xl md:text-4xl font-black text-gray-900 mb-2 tracking-wide">SISTEM ABSENSI</h1>
-          <h2 className="text-3xl md:text-4xl font-black text-gray-900 tracking-wide">PPM JOGJA</h2>
-        </div>
-        
-        {/* Sapaan */}
-        <div className="mb-12">
-          <p className="text-2xl md:text-3xl font-black text-gray-900 tracking-wide">
-            HALO <strong>{JSON.parse(localStorage.getItem("user"))?.username} </strong></p>
-        </div>
-        
-        {/* Tombol utama */}
-        <div className="flex flex-col sm:flex-row justify-center gap-6 mb-16 w-full">
-          <button
-            onClick={() => navigate("/absensi")}
-            className="flex flex-col items-center justify-center bg-green-600 text-white rounded-2xl w-full sm:w-48 h-48 hover:bg-green-700 active:bg-green-800 active:scale-95 transition-all duration-150 shadow-lg group"
-          >
-            <div className="w-16 h-16 mb-3 bg-white rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-150">
-              <img src={absensiIcon} alt="absensi" className="w-10 h-10" />
+    <div className={`min-h-screen ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
+      <Sidebar 
+        isDarkMode={isDarkMode} 
+        sidebarOpen={sidebarOpen} 
+        setSidebarOpen={setSidebarOpen}
+        role="pengurus"
+      />
+
+      {/* Main content */}
+      <div className="md:ml-64 p-4 md:p-8">
+          <div className="max-w-6xl mx-auto">
+            {/* Greeting */}
+            <div className="mb-8">
+              <h1 className={`text-3xl md:text-4xl font-black mb-2 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>SISTEM PRESENSI PPM JOGJA</h1>
+              <p className={`text-xl md:text-2xl font-bold ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Halo, <strong>{user?.username}</strong></p>
+              <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Dashboard Pengurus</p>
             </div>
-            <span className="font-black text-xl tracking-wider">ABSENSI (Scan Wajah)</span>
-          </button>
-          
-          <button
-            onClick={() => navigate("/rekap")}
-            className="flex flex-col items-center justify-center bg-green-600 text-white rounded-2xl w-full sm:w-48 h-48 hover:bg-green-700 active:bg-green-800 active:scale-95 transition-all duration-150 shadow-lg group"
-          >
-            <div className="w-16 h-16 mb-3 bg-white rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-150">
-              <img src={rekapIcon} alt="rekap" className="w-10 h-10" />
+
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Total Santri */}
+              <div className={`rounded-2xl shadow-lg p-8 ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className={`text-lg font-bold ${isDarkMode ? 'text-gray-200' : 'text-gray-900'}`}>Jumlah Santri</h3>
+                  <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6 text-white">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+                    </svg>
+                  </div>
+                </div>
+                <p className={`text-5xl font-black ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>{santris.length}</p>
+                <p className={`text-sm mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Total santri terdaftar</p>
+              </div>
+
+              {/* Santri Putra */}
+              <div className={`rounded-2xl shadow-lg p-8 ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className={`text-lg font-bold ${isDarkMode ? 'text-gray-200' : 'text-gray-900'}`}>Santri Putra</h3>
+                  <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6 text-white">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                    </svg>
+                  </div>
+                </div>
+                <p className={`text-5xl font-black ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{santris.filter(s => s.jenis_kelamin === 'L').length}</p>
+                <p className={`text-sm mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Santri laki-laki</p>
+              </div>
+
+              {/* Santri Putri */}
+              <div className={`rounded-2xl shadow-lg p-8 ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className={`text-lg font-bold ${isDarkMode ? 'text-gray-200' : 'text-gray-900'}`}>Santri Putri</h3>
+                  <div className="w-12 h-12 bg-pink-600 rounded-xl flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6 text-white">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                    </svg>
+                  </div>
+                </div>
+                <p className={`text-5xl font-black ${isDarkMode ? 'text-pink-400' : 'text-pink-600'}`}>{santris.filter(s => s.jenis_kelamin === 'P').length}</p>
+                <p className={`text-sm mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Santri perempuan</p>
+              </div>
             </div>
-            <span className="font-black text-xl tracking-wider">REKAP</span>
-          </button>
-                    <button
-            onClick={() => navigate("/validasi-izin")}
-            className="flex flex-col items-center justify-center bg-green-600 text-white rounded-2xl w-full sm:w-48 h-48 hover:bg-green-700 active:bg-green-800 active:scale-95 transition-all duration-150 shadow-lg group"
-          >
-            <div className="w-16 h-16 mb-3 bg-white rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-150">
-              <img src={izinIcon} alt="perizinan" className="w-10 h-10" />
-            </div>
-            <span className="font-black text-xl tracking-wider">Perizinan</span>
-          </button>
-        </div>
-        
-        
-        {/* Tombol Logout */}
-        <button
-          className="bg-red-700 text-white font-bold px-16 rounded-2xl hover:bg-red-800 active:bg-red-900 active:scale-95 transition-all duration-150 shadow-lg text-xl tracking-wider"
-          onClick={() => {
-            localStorage.removeItem("user");
-            navigate("/");
-          }}
-        >
-          LOGOUT
-        </button>
+          </div>
       </div>
     </div>
   );
