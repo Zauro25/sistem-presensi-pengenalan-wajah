@@ -2,7 +2,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from django.utils import timezone
-from .models import Santri, Absensi, SuratIzin
+from .models import Santri, Absensi, SuratIzin, RegistrationCode
 from .serializers import SantriSerializer, AbsensiSerializer, SuratIzinSerializer, UserSerializer, RegisterSantriAccountSerializer
 from .models import Santri
 from .face_utils import decode_base64_image, recognize_from_image_pil, encode_face_from_image
@@ -20,6 +20,8 @@ import face_recognition
 from django.db import IntegrityError
 from openpyxl.styles import Alignment, Font, PatternFill
 from .utils import get_rekap_data
+import os
+from django.conf import settings
 
 
 
@@ -56,18 +58,65 @@ TELAT_KEY = "telat_start_time"
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def api_permohonan_izin(request):
+    import sys
+    from datetime import datetime
+    
+    # Log to file and stderr
+    log_file = '/tmp/izin_api.log'
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+    
+    def log_msg(msg):
+        print(f"[{timestamp}] {msg}", file=sys.stderr)
+        try:
+            with open(log_file, 'a') as f:
+                f.write(f"[{timestamp}] {msg}\n")
+        except:
+            pass
+        sys.stderr.flush()
+    
+    # Very visible logging
+    log_msg("\n" + "="*80)
+    log_msg(">>> API PERMOHONAN IZIN CALLED")
+    log_msg("="*80)
+    
+    # Get the data
     santri_pk = request.data.get('santri_pk')
     tanggal = request.data.get('tanggal')
     sesi = request.data.get('sesi')
     alasan = request.data.get('alasan')
+    kelas = request.data.get('kelas')
+    
+    # Log extracted values
+    log_msg(f">>> Extracted data:")
+    log_msg(f"    santri_pk = {santri_pk!r}")
+    log_msg(f"    tanggal   = {tanggal!r}")
+    log_msg(f"    sesi      = {sesi!r}")
+    log_msg(f"    alasan    = {alasan!r}")
+    log_msg(f"    kelas     = {kelas!r}")
+    
+    # Validate
+    log_msg(f">>> Validating...")
     if not (santri_pk and tanggal and sesi and alasan):
+        log_msg(f">>> VALIDATION FAILED - Missing required fields")
+        log_msg("="*80 + "\n")
         return Response({'ok': False, 'message': 'Lengkapi data'}, status=400)
+    
+    log_msg(f">>> Validation OK - Looking up santri...")
     try:
         s = Santri.objects.get(pk=santri_pk)
+        log_msg(f">>> Found santri: {s.nama} (ID: {s.id})")
     except Santri.DoesNotExist:
+        log_msg(f">>> ERROR: Santri with pk={santri_pk} not found")
+        log_msg("="*80 + "\n")
         return Response({'ok': False, 'message': 'Santri tidak ditemukan'}, status=404)
-    si = SuratIzin(santri=s, tanggal=tanggal, sesi=sesi, alasan=alasan)
+    
+    # Create
+    log_msg(f">>> Creating SuratIzin...")
+    si = SuratIzin(santri=s, kelas=kelas, tanggal=tanggal, sesi=sesi, alasan=alasan)
     si.save()
+    log_msg(f">>> SUCCESS! Created SuratIzin with ID: {si.id}")
+    log_msg("="*80 + "\n")
+    
     return Response({'ok': True, 'surat': SuratIzinSerializer(si).data})
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -169,18 +218,62 @@ class RegisterSantriView(generics.CreateAPIView):
     permission_classes = [AllowAny]
 
     def create(self, request, *args, **kwargs):
+        # Validate registration code
+        registration_code = request.data.get('registration_code', '').strip()
+        if not registration_code:
+            return Response({
+                "ok": False,
+                "message": "Kode registrasi wajib diisi. Hubungi pengurus untuk mendapatkan kode."
+            }, status=400)
+        
+        try:
+            reg_code = RegistrationCode.objects.get(code=registration_code)
+        except RegistrationCode.DoesNotExist:
+            return Response({
+                "ok": False,
+                "message": "Kode registrasi tidak valid"
+            }, status=400)
+        
+        if reg_code.used:
+            return Response({
+                "ok": False,
+                "message": "Kode registrasi sudah pernah digunakan"
+            }, status=400)
+        
+        if not reg_code.is_valid():
+            return Response({
+                "ok": False,
+                "message": "Kode registrasi sudah kadaluarsa"
+            }, status=400)
+        
+        # Verify name matches
+        nama_input = request.data.get('nama', '').strip()
+        if nama_input.lower() != reg_code.santri_name.lower():
+            return Response({
+                "ok": False,
+                "message": f"Nama tidak sesuai dengan kode registrasi. Kode ini untuk: {reg_code.santri_name}"
+            }, status=400)
+        
+        # Proceed with registration
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         santri = serializer.save()
+        
+        # Mark code as used
+        reg_code.used = True
+        reg_code.used_by = santri.user
+        reg_code.save()
 
         return Response({
+            "ok": True,
             "santri_id": santri.id,
             "user_id": santri.user.id,
             "username": santri.user.username,
             "nama": santri.nama,
             "sektor": santri.sektor,
-            "role": "santri"
+            "role": "santri",
+            "message": "Registrasi berhasil!"
         })
 
 class LoginPengurusView(APIView):
@@ -375,9 +468,18 @@ def api_recognize_and_attend(request):
         telat_start = absensi_info.get('telat_start')
 
         pil_img = decode_base64_image(data_url)
-        santri, info, location = recognize_from_image_pil(pil_img, tolerance=0.45)
+        santri, info, location = recognize_from_image_pil(pil_img, min_prob=0.6)
         if not santri:
-            return Response({"ok": False, "message": "Wajah tidak cocok"}, status=404)
+            error_map = {
+                "no_face": "Wajah tidak terdeteksi, pastikan wajah terlihat jelas",
+                "no_dataset": "Belum ada dataset wajah yang terdaftar",
+                "not_enough_classes": "Minimal dua santri perlu diregistrasi agar model SVM bisa dilatih",
+                "low_confidence": "Wajah tidak cocok (confidence terlalu rendah)",
+                "not_found": "Profil santri tidak ditemukan"
+            }
+            message = error_map.get(info, "Wajah tidak cocok")
+            status_code = 404 if info in {"low_confidence", "no_face"} else 400
+            return Response({"ok": False, "message": message}, status=status_code)
 
         status_absensi = "Hadir"
         if telat_start:
@@ -406,6 +508,10 @@ def api_recognize_and_attend(request):
                 "created_by": request.user
             }
         )
+        
+        # Auto-assign santri to class on first attendance
+        if kelas and kelas != "Kamu kelas apa?":
+            santri.assign_to_kelas(kelas)
 
         return Response({
             "ok": True,
@@ -453,8 +559,17 @@ def api_export_xlsx(request):
     putri = data['putri']
 
     cols = ['Nama'] + [h['col_key'] for h in headers]
-    df_putra = pd.DataFrame(putra)[cols]
-    df_putri = pd.DataFrame(putri)[cols]
+    
+    # Handle empty data - create DataFrames with proper columns
+    if len(putra) > 0:
+        df_putra = pd.DataFrame(putra)[cols]
+    else:
+        df_putra = pd.DataFrame(columns=cols)
+    
+    if len(putri) > 0:
+        df_putri = pd.DataFrame(putri)[cols]
+    else:
+        df_putri = pd.DataFrame(columns=cols)
 
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -492,3 +607,101 @@ def api_export_xlsx(request):
     response = HttpResponse(output.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = 'attachment; filename=rekap_absensi.xlsx'
     return response
+
+
+# ======================================================
+# REGISTRATION CODE VERIFICATION
+# ======================================================
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def api_verify_santri_name(request):
+    """
+    Pengurus endpoint to verify if a santri name exists in data_santri.xlsx
+    and generate a registration code.
+    """
+    if not request.user.is_staff:
+        return Response({'ok': False, 'message': 'Only pengurus can verify santri'}, status=403)
+    
+    santri_name = request.data.get('santri_name', '').strip()
+    if not santri_name:
+        return Response({'ok': False, 'message': 'Nama santri harus diisi'}, status=400)
+    
+    # Read the Excel file
+    excel_path = os.path.join(settings.MEDIA_ROOT, 'data_santri', 'data_santri.xlsx')
+    if not os.path.exists(excel_path):
+        return Response({'ok': False, 'message': 'File data santri tidak ditemukan'}, status=500)
+    
+    try:
+        df = pd.read_excel(excel_path)
+        # Normalize column names (remove spaces, lowercase)
+        df.columns = df.columns.str.strip().str.lower()
+        
+        # Look for name column - try common variations
+        name_column = None
+        for col in ['nama', 'name', 'nama santri', 'nama lengkap']:
+            if col in df.columns:
+                name_column = col
+                break
+        
+        if name_column is None:
+            return Response({
+                'ok': False, 
+                'message': 'Kolom nama tidak ditemukan di file Excel',
+                'available_columns': list(df.columns)
+            }, status=500)
+        
+        # Search for the name (case-insensitive)
+        df[name_column] = df[name_column].astype(str).str.strip()
+        found = df[df[name_column].str.lower() == santri_name.lower()]
+        
+        if found.empty:
+            return Response({
+                'ok': False, 
+                'message': f'Nama "{santri_name}" tidak ditemukan dalam daftar santri resmi',
+                'verified': False
+            })
+        
+        # Name found - generate registration code
+        reg_code = RegistrationCode.objects.create(
+            santri_name=santri_name,
+            generated_by=request.user
+        )
+        
+        return Response({
+            'ok': True,
+            'verified': True,
+            'message': f'Santri "{santri_name}" terverifikasi',
+            'registration_code': reg_code.code,
+            'expires_at': reg_code.expires_at.isoformat()
+        })
+        
+    except Exception as e:
+        return Response({
+            'ok': False,
+            'message': f'Error reading Excel file: {str(e)}'
+        }, status=500)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def api_list_registration_codes(request):
+    """
+    List all registration codes (for pengurus)
+    """
+    if not request.user.is_staff:
+        return Response({'ok': False, 'message': 'Only pengurus can view codes'}, status=403)
+    
+    codes = RegistrationCode.objects.all().order_by('-created_at')
+    data = [{
+        'id': code.id,
+        'code': code.code,
+        'santri_name': code.santri_name,
+        'used': code.used,
+        'is_valid': code.is_valid(),
+        'created_at': code.created_at,
+        'expires_at': code.expires_at,
+        'generated_by': code.generated_by.username if code.generated_by else None,
+        'used_by': code.used_by.username if code.used_by else None
+    } for code in codes]
+    
+    return Response({'ok': True, 'data': data})

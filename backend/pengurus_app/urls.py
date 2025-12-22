@@ -20,5 +20,7 @@ urlpatterns = [
     path('end-absensi/', views.api_end_absensi),
     path('start-telat/', views.api_start_telat),
     path('user/', views.api_get_user),
-    path("api/logout/", views.api_logout)
+    path("logout/", views.api_logout),
+    path('verify-santri/', views.api_verify_santri_name, name="verify-santri"),
+    path('registration-codes/', views.api_list_registration_codes, name="registration-codes"),
 ]

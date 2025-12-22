@@ -1,8 +1,11 @@
+import base64
+from io import BytesIO
+
 import face_recognition
 import numpy as np
 from PIL import Image
-from io import BytesIO
-import base64
+from sklearn.svm import SVC
+
 from .models import Santri
 
 def decode_base64_image(data_url):
@@ -29,6 +32,31 @@ def get_all_encodings():
     return enc_dict
 
 
+def train_svm_classifier(enc_dict):
+    """Train a linear SVM (one-vs-rest) on stored encodings."""
+    ids = list(enc_dict.keys())
+    if len(ids) < 2:
+        return None, "not_enough_classes"
+
+    X = np.stack([enc_dict[i] for i in ids])
+    y = np.array(ids)
+
+    model = SVC(kernel="linear", probability=True)
+    model.fit(X, y)
+    return model, None
+
+
+def predict_with_svm(model, face_enc, min_prob=0.6):
+    probs = model.predict_proba([face_enc])[0]
+    best_idx = int(np.argmax(probs))
+    best_prob = float(probs[best_idx])
+    if best_prob < min_prob:
+        return None, best_prob
+
+    best_pk = model.classes_[best_idx]
+    return int(best_pk), best_prob
+
+
 def encode_face_from_image(pil_image):
     img = np.array(pil_image.convert("RGB"))
     face_locations = face_recognition.face_locations(img, model='hog')
@@ -40,7 +68,7 @@ def encode_face_from_image(pil_image):
     return encs[0].tolist(), face_locations[0]
 
 
-def recognize_from_image_pil(pil_image, tolerance=0.45):
+def recognize_from_image_pil(pil_image, min_prob=0.6):
     try:
         img = np.array(pil_image.convert("RGB"))
         face_locations = face_recognition.face_locations(img, model='hog')
@@ -56,22 +84,22 @@ def recognize_from_image_pil(pil_image, tolerance=0.45):
         if not db_encs:
             return None, "no_dataset", None
 
+        model, train_error = train_svm_classifier(db_encs)
+        if train_error:
+            return None, train_error, None
+
         face_enc = face_encodings[0]
-        ids = list(db_encs.keys())
-        encs = np.stack([db_encs[i] for i in ids])
+        predicted_pk, prob = predict_with_svm(model, face_enc, min_prob=min_prob)
+        if predicted_pk is None:
+            return None, "low_confidence", None
 
-        matches = face_recognition.compare_faces(encs, face_enc, tolerance=tolerance)
-        distances = face_recognition.face_distance(encs, face_enc)
+        try:
+            santri = Santri.objects.get(pk=predicted_pk)
+        except Santri.DoesNotExist:
+            return None, "not_found", None
 
-        matched_indices = [i for i, m in enumerate(matches) if m]
-        if matched_indices:
-            best_idx = min(matched_indices, key=lambda i: distances[i])
-            santri_pk = ids[best_idx]
-            santri = Santri.objects.get(pk=santri_pk)
-            loc = face_locations[0]
-            return santri, float(distances[best_idx]), loc
-        else:
-            return None, "no_match", None
+        loc = face_locations[0]
+        return santri, prob, loc
     except Exception as e:
         print(f"Error in recognize_from_image_pil: {str(e)}")
         import traceback
