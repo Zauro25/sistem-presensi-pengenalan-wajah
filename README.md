@@ -1,103 +1,104 @@
-# Absensi PPM – Face Recognition Attendance
+# Presensi PPM Berbasis Pengenalan Wajah – Face Recognition Attendance
 
-Monorepo containing a Django REST backend and a Vite/React frontend for face-recognition-based attendance and permit validation.
+Monorepo containing a Django REST API backend and a Next.js frontend for face-recognition-based attendance, permit validation, and recapitulating.
 
 ## Project Structure
 
-- `backend/`: Django project and app code
-- `frontend/`: Vite + React frontend
-- `deploy/`: Nginx and systemd service examples
+- [backend/](backend/): Django project and app code
+- [frontend/](frontend/): Next.js 14+ (App Router) frontend
+- [deploy/](deploy/): Nginx reverse proxy and systemd service examples
+- [docker-compose.yml](docker-compose.yml): Local container orchestration
 
 ## Requirements
 
 - Python 3.11+
 - Node.js 18+
-- (Optional) virtualenv
+- Docker 24+ and Docker Compose
+- Optional: `venv` for local Python isolation
 
-## Backend Setup
+## Quick Start (Docker)
 
-1. Create and activate virtual environment
+- Create environment files:
+  - Backend: [backend/.env](backend/.env)
+  - Frontend: [frontend/.env.local](frontend/.env.local)
+
+- Bring services up:
+```bash
+docker compose up -d --build
+```
+- Access:
+  - API: http://localhost:8000/api
+  - Docs: http://localhost:8000/api/docs/
+  - Frontend: http://localhost:3000
+
+## Backend (Django + DRF)
+
+### Setup (local dev)
 ```bash
 cd backend
-python3 -m venv venv
-source venv/bin/activate
-```
-2. Install dependencies
-```bash
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
+python manage.py migrate
+python manage.py runserver
 ```
-3. Environment variables
-Create a `.env` in `backend/` (see keys below):
+
+### Environment (backend/.env)
+Use explicit values for local development:
 ```
 DJANGO_SECRET_KEY=change-me
 DEBUG=True
 ALLOWED_HOSTS=*
 DATABASE_URL=sqlite:///db.sqlite3
-CORS_ALLOWED_ORIGINS=http://localhost:5173
 FACE_TOLERANCE=0.45
-USE_JWT=true
 ```
 
-4. Apply migrations and run server
-```bash
-python manage.py migrate
-python manage.py runserver
-```
+Notes:
+- API docs are available at `/api/docs/` and the OpenAPI schema at `/api/schema/`.
+- Authentication uses DRF TokenAuthentication by default.
+- Media is served from [backend/media](backend/media); face photos reside under [backend/media/santri_photos](backend/media/santri_photos).
 
-5. API Docs
-- Swagger UI: `/api/docs/`
-- OpenAPI schema: `/api/schema/`
+## Frontend (Next.js)
 
-## Frontend Setup
-
+### Setup (local dev)
 ```bash
 cd frontend
 npm ci
 npm run dev
 ```
 
-Environment variable (create `frontend/.env`):
-```
-VITE_API_BASE=http://127.0.0.1:8000/api
-```
+Open http://localhost:3000
 
-Build for production:
-```bash
-npm run build
+### Environment (frontend/.env.local)
+Expose the API base to the browser:
+```
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8000/api
 ```
 
-## Architecture
+### Useful Docs
+- Project overview: [frontend/README.md](frontend/README.md)
+- API reference: [frontend/API_REFERENCE.md](frontend/API_REFERENCE.md)
+- Deployment guide: [frontend/DEPLOYMENT.md](frontend/DEPLOYMENT.md)
+- Implementation summary: [frontend/IMPLEMENTATION_SUMMARY.md](frontend/IMPLEMENTATION_SUMMARY.md)
+- Quick start: [frontend/QUICK_START.md](frontend/QUICK_START.md)
 
-- Backend (Django + DRF)
-  - Pagination, filtering, and ordering enabled globally
-  - TokenAuth/JWT ready; Swagger docs via drf-spectacular
-  - Reports service for XLSX export
-- Frontend (React + Vite + Tailwind)
-  - Axios HTTP client with token injection
-  - `AuthContext` for auth state management
+## Deployment
 
-## Deployment (Docker + Nginx)
+- Nginx reverse proxy config: [deploy/nginx/nginx.conf](deploy/nginx/nginx.conf)
+- Systemd service example: [deploy/systemd/absensi-backend.service](deploy/systemd/absensi-backend.service)
+- `docker-compose.yml` maps backend port `8000` and Nginx on host `80`; media is mounted read-only into Nginx.
 
-1. Build and run with docker-compose
-```bash
-docker compose up -d --build
-```
-2. Services
-- Backend (Gunicorn) on `backend:8000`
-- Frontend (Nginx static)
-- Nginx reverse proxy on host port 80 (`deploy/nginx/nginx.conf`)
+## Coding Standards
 
-3. Systemd example
-- `deploy/systemd/absensi-backend.service`
+- Keep logic stable; focus changes on intended features.
+- Use ESLint in the frontend: `npm run lint`.
+- Prefer small, focused PRs with clear descriptions.
 
-## Scripts
+## Troubleshooting
 
-- `backend/scripts/load_encoding.py`: utilities related to face encodings.
-
-## Contributing
-
-- Keep logic unchanged when cleaning code or formatting.
-- Avoid committing large media, build artifacts, and environment folders (covered by `.gitignore`).
+- Ensure `NEXT_PUBLIC_API_URL` matches the backend base (ends with `/api`).
+- When `DEBUG=False`, set `ALLOWED_HOSTS` appropriately.
+- For local DB, provide `DATABASE_URL=sqlite:///db.sqlite3`.
 
 ## License
 
