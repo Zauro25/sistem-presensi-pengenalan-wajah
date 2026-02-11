@@ -22,19 +22,17 @@ class Santri(models.Model):
     foto = models.ImageField(upload_to='santri_photos/', null=True, blank=True)
     face_encoding = models.JSONField(null=True, blank=True)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="santri_profile", null=True, blank=True)
-    kelas_list = models.JSONField(default=list, blank=True)  # List of classes santri belongs to
+    kelas_list = models.JSONField(default=list, blank=True)
 
     def __str__(self):
         return f"{self.santri_id} - {self.nama}"
     
     def assign_to_kelas(self, kelas):
-        """Add santri to a class if not already in it"""
         if kelas and kelas not in self.kelas_list:
             self.kelas_list.append(kelas)
             self.save()
     
     def is_in_kelas(self, kelas):
-        """Check if santri is in a specific class"""
         return kelas in self.kelas_list if self.kelas_list else False
 
 
@@ -93,5 +91,7 @@ class RegistrationCode(models.Model):
     def is_valid(self):
         return not self.used and timezone.now() < self.expires_at
 
+    def __str__(self):
+        return f"{self.code} - {self.santri_name} ({'Used' if self.used else 'Valid' if self.is_valid() else 'Expired'})"
     def __str__(self):
         return f"{self.code} - {self.santri_name} ({'Used' if self.used else 'Valid' if self.is_valid() else 'Expired'})"

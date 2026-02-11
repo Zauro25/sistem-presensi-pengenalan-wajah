@@ -46,7 +46,6 @@ export default function IzinPage() {
     setLoading(true);
     setMessage({ type: '', text: '' });
 
-    // Validate only required fields: tanggal, sesi, alasan (kelas is optional)
     if (!formData.tanggal || !formData.sesi || !formData.alasan) {
       setMessage({ 
         type: 'error', 
@@ -57,7 +56,6 @@ export default function IzinPage() {
     }
 
     try {
-      // Get santri ID from user object - returned by login API as santri_id
       const santriId = user?.santri_id;
       if (!santriId) {
         setMessage({ 
@@ -87,7 +85,7 @@ export default function IzinPage() {
         alasan: '',
       });
       setShowForm(false);
-      loadIzinList(); // Reload list
+      loadIzinList();
     } catch (error) {
       console.error('Error object:', error);
       console.error('Error message:', error?.message);
@@ -111,15 +109,6 @@ export default function IzinPage() {
     return styles[status] || 'bg-gray-100 text-gray-800';
   };
 
-  const getStatusIcon = (status) => {
-    const icons = {
-      'Menunggu': 'Menunggu',
-      'Disetujui': 'ACC',
-      'Ditolak': 'Ditolak',
-    };
-    return icons[status] || '📋';
-  };
-
   return (
     <div>
       <div className="mb-8 flex justify-between items-center">
@@ -128,7 +117,6 @@ export default function IzinPage() {
         </div>
       </div>
 
-      {/* Message */}
       {message.text && (
         <div className={`mb-6 px-4 py-3 rounded-lg ${
           message.type === 'success' 
@@ -139,7 +127,6 @@ export default function IzinPage() {
         </div>
       )}
 
-      {/* Form */}
       {showForm && (
         <div className="bg-white rounded-lg shadow p-6 mb-8">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Form Permohonan Izin</h2>
@@ -164,7 +151,7 @@ export default function IzinPage() {
                   name="kelas"
                   value={formData.kelas}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                 >
                   <option value="">Pilih kelas (opsional)</option>
                   <option value="Semua Kelas">Semua kelas</option>
@@ -184,7 +171,7 @@ export default function IzinPage() {
                   name="tanggal"
                   value={formData.tanggal}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                   required
                 />
               </div>
@@ -197,7 +184,7 @@ export default function IzinPage() {
                   name="sesi"
                   value={formData.sesi}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                   required
                 >
                   <option value="Subuh">Subuh</option>
@@ -214,8 +201,8 @@ export default function IzinPage() {
                   name="alasan"
                   value={formData.alasan}
                   onChange={handleChange}
-                  rows="4"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  rows={4}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                   placeholder="Jelaskan alasan Anda meminta izin..."
                   required
                 />
@@ -226,7 +213,7 @@ export default function IzinPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition disabled:bg-blue-300 disabled:cursor-not-allowed"
+                className="flex-1 bg-primary text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-700 transition disabled:bg-primary-300 disabled:cursor-not-allowed"
               >
                 {loading ? 'Mengirim...' : 'Kirim Permohonan'}
               </button>
@@ -242,7 +229,6 @@ export default function IzinPage() {
         </div>
       )}
 
-      {/* List of Izin */}
       <div className="bg-white rounded-lg shadow">
         <div className="px-6 py-4 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">Riwayat Permohonan Izin</h2>
@@ -250,7 +236,7 @@ export default function IzinPage() {
         <div className="p-6">
           {loadingList ? (
             <div className="text-center py-8">
-              <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+              <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
             </div>
           ) : izinList.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
@@ -263,7 +249,6 @@ export default function IzinPage() {
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex-1">
                       <div className="flex items-center space-x-3 mb-2">
-                        <span className="text-2xl">{getStatusIcon(izin.status)}</span>
                         <div>
                           <p className="font-semibold text-gray-900">
                             {new Date(izin.tanggal).toLocaleDateString('id-ID', { 
@@ -276,10 +261,10 @@ export default function IzinPage() {
                           <p className="text-sm text-gray-600">Sesi: {izin.sesi} • Kelas: {izin.kelas || '-'}</p>
                         </div>
                       </div>
-                      <p className="text-gray-700 mb-2">{izin.alasan}</p>
+                      <p className="mt-5 text-gray-700 mb-2 font-semibold">Alasan: {izin.alasan}</p>
                       {izin.note && (
-                        <div className="mt-2 p-3 bg-gray-50 rounded border-l-4 border-blue-500">
-                          <p className="text-sm font-medium text-gray-700">Catatan:</p>
+                        <div className="mt-2 p-3 bg-gray-50 rounded border-l-4 border-primary text-center">
+                          <p className="text-sm font-medium text-gray-700"><b>Catatan:</b></p>
                           <p className="text-sm text-gray-600">{izin.note}</p>
                         </div>
                       )}
@@ -295,13 +280,12 @@ export default function IzinPage() {
         </div>
       </div>
       
-      {/* Button below table - centered */}
       <div className="mt-6 flex justify-center">
         <button
           onClick={() => setShowForm(!showForm)}
-          className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition"
+          className="bg-primary text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-700 transition"
         >
-          {showForm ? '✕ Tutup Form' : '+ Ajukan Izin'}
+          {showForm ? 'Tutup Form' : 'Ajukan Izin'}
         </button>
       </div>
     </div>

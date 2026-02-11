@@ -22,8 +22,8 @@ export default function FaceRegistrationPage() {
   const [lastScan, setLastScan] = useState(null);
 
   const videoRef = useRef(null);
-  const captureCanvasRef = useRef(null); // offscreen capture
-  const overlayRef = useRef(null); // draw bounding boxes
+  const captureCanvasRef = useRef(null);
+  const overlayRef = useRef(null);
   const streamRef = useRef(null);
   const nextScanAtRef = useRef(0);
 
@@ -55,13 +55,11 @@ export default function FaceRegistrationPage() {
     }
   }, []);
 
-  // Clean up on unmount
   useEffect(() => {
     startCamera();
     return () => stopCamera();
   }, [startCamera, stopCamera]);
 
-  // Draw bounding box overlay
   useEffect(() => {
     const overlay = overlayRef.current;
     const video = videoRef.current;
@@ -106,11 +104,9 @@ export default function FaceRegistrationPage() {
     }
 
     setProcessing(true);
-    // throttle scans to ~ every 1 second
     nextScanAtRef.current = Date.now() + 1000;
     setStatus((prev) => (prev === 'success' ? prev : 'detecting'));
 
-    // Capture frame to data URL
     const vw = video.videoWidth || 640;
     const vh = video.videoHeight || 480;
     canvas.width = vw;
@@ -143,7 +139,6 @@ export default function FaceRegistrationPage() {
     }
   }, [processing, user, detectedName]);
 
-  // Kick off the scanning loop once the video element is ready
   useEffect(() => {
     requestAnimationFrame(processFrame);
   }, [processFrame]);

@@ -36,7 +36,6 @@ export default function LoginPage() {
   };
 
   useEffect(() => {
-    // Redirect if already logged in
     if (user && role) {
       if (role === 'pengurus') {
         router.push('/pengurus/dashboard');
@@ -53,8 +52,6 @@ export default function LoginPage() {
 
     try {
       const response = await login(username, password);
-      
-      // Redirect based on role
       if (response.role === 'pengurus') {
         router.push('/pengurus/dashboard');
       } else {
@@ -91,7 +88,7 @@ export default function LoginPage() {
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
               placeholder="Masukkan username"
               required
             />
@@ -106,7 +103,7 @@ export default function LoginPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
               placeholder="Masukkan password"
               required
             />
@@ -115,7 +112,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition disabled:bg-blue-300 disabled:cursor-not-allowed"
+            className="w-full bg-primary text-white py-3 rounded-lg font-semibold hover:bg-primary-700 transition disabled:bg-primary-300 disabled:cursor-not-allowed"
           >
             {loading ? 'Memproses...' : 'Login'}
           </button>
@@ -124,7 +121,7 @@ export default function LoginPage() {
         <div className="mt-6 text-center">
           <p className="text-gray-600">
             Belum punya akun?{' '}
-            <Link href="/register" className="text-blue-600 hover:text-blue-700 font-semibold">
+            <Link href="/register" className="text-primary hover:text-primary-700 font-semibold">
               Daftar Santri
             </Link>
           </p>
@@ -137,7 +134,7 @@ export default function LoginPage() {
               style={{ backgroundColor: 'var(--surface)' }}
               title={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
             >
-              {theme === 'dark' ? '🌙' : '☀️'}
+              {theme === 'dark' ? 'Dark' : 'Light'}
             </button>
           </div>
       </div>

@@ -5,9 +5,19 @@
   --foreground: #171717;
   --form-text: #000000;
   --sidebar-bg: #ffffff;
-  --sidebar-border: #e5e7eb; /* gray-200 */
-  --surface: #ffffff; /* card bg */
-  --border: #e5e7eb; /* card border */
+  --sidebar-border: #e5e7eb;
+  --surface: #ffffff;
+  --border: #e5e7eb;
+  
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --secondary: #e5e7eb;
+  --secondary-foreground: #171717;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --ring: #2563eb;
+  --accent: #f5f5f5;
+  --accent-foreground: #171717;
 }
 
 @theme inline {
@@ -19,13 +29,23 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #121212; /* dark gray background */
-    --foreground: #e6e6e6; /* soft light gray text */
+    --background: #121212;
+    --foreground: #e6e6e6;
     --form-text: #ffffff;
-    --sidebar-bg: #151515; /* slightly lighter than bg */
+    --sidebar-bg: #151515;
     --sidebar-border: #2a2a2a;
-    --surface: #1a1a1a; /* card surfaces */
+    --surface: #1a1a1a;
     --border: #2a2a2a;
+    
+    --primary: #3b82f6;
+    --primary-foreground: #0a0a0a;
+    --secondary: #2a2a2a;
+    --secondary-foreground: #e5e7eb;
+    --destructive: #f87171;
+    --destructive-foreground: #0a0a0a;
+    --ring: #3b82f6;
+    --accent: #2a2a2a;
+    --accent-foreground: #e5e7eb;
   }
 }
 
@@ -34,8 +54,6 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
-
-/* Explicit theme override via data-theme */
 :root[data-theme='light'] {
   --background: #ffffff;
   --foreground: #171717;
@@ -44,6 +62,16 @@ body {
   --sidebar-border: #e5e7eb;
   --surface: #ffffff;
   --border: #e5e7eb;
+  
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --secondary: #e5e7eb;
+  --secondary-foreground: #171717;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --ring: #2563eb;
+  --accent: #f5f5f5;
+  --accent-foreground: #171717;
 }
 
 :root[data-theme='dark'] {
@@ -54,23 +82,27 @@ body {
   --sidebar-border: #2a2a2a;
   --surface: #1a1a1a;
   --border: #2a2a2a;
+  
+  --primary: #3b82f6;
+  --primary-foreground: #0a0a0a;
+  --secondary: #2a2a2a;
+  --secondary-foreground: #e5e7eb;
+  --destructive: #f87171;
+  --destructive-foreground: #0a0a0a;
+  --ring: #3b82f6;
+  --accent: #2a2a2a;
+  --accent-foreground: #e5e7eb;
 }
-
-/* Form text color: black on light, white on dark */
 label,
 input,
 select,
 textarea {
   color: var(--form-text) !important;
 }
-
-/* Placeholder color adapts to theme */
 input::placeholder,
 textarea::placeholder {
   color: color-mix(in oklab, var(--form-text) 50%, transparent) !important;
 }
-
-/* Dark theme overrides for common Tailwind utility classes */
 :root[data-theme='dark'] .bg-white { background-color: var(--surface) !important; }
 :root[data-theme='dark'] .bg-gray-50 { background-color: #161616 !important; }
 :root[data-theme='dark'] .bg-gray-100 { background-color: #1b1b1b !important; }
@@ -80,8 +112,6 @@ textarea::placeholder {
 :root[data-theme='dark'] .text-gray-700 { color: color-mix(in oklab, var(--foreground) 85%, transparent) !important; }
 :root[data-theme='dark'] .text-gray-600 { color: color-mix(in oklab, var(--foreground) 70%, transparent) !important; }
 :root[data-theme='dark'] .text-gray-500 { color: color-mix(in oklab, var(--foreground) 55%, transparent) !important; }
-
-/* Status and accent adjustments for dark mode */
 :root[data-theme='dark'] .bg-blue-50 { background-color: rgba(59, 130, 246, 0.12) !important; }
 :root[data-theme='dark'] .bg-blue-100 { background-color: rgba(59, 130, 246, 0.18) !important; }
 :root[data-theme='dark'] .text-blue-600 { color: #93c5fd !important; }

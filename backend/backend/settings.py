@@ -62,19 +62,15 @@ WSGI_APPLICATION = "backend.wsgi.application"
 DATABASES = {
     'default': dj_database_url.config(
         default=os.getenv("DATABASE_URL"),
-        conn_max_age=0,  # Disable connection pooling for testing
+        conn_max_age=0,
         conn_health_checks=False,
         ssl_require=True
     )
 }
-
-# Override with custom options
 DATABASES['default']['OPTIONS'] = {
     'connect_timeout': 30,
     'options': '-c statement_timeout=30000'
 }
-
-# Close database connections after each request to free up pool
 CONN_MAX_AGE = 0
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -91,7 +87,6 @@ STATIC_URL = "/static/"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
-# DRF
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.TokenAuthentication",

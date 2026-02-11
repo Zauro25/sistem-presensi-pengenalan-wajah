@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/lib/api';
 
@@ -84,12 +84,11 @@ export default function SantriDashboard() {
         <p className="text-gray-600 mt-2 text-center">Selamat datang, {user?.nama_lengkap || user?.username}</p>
       </div>
 
-      {/* Info + Attendance Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center">
-            <div className="p-3 bg-blue-100 rounded-lg">
-              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="p-3 bg-primary-100 rounded-lg">
+              <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
             </div>
@@ -151,15 +150,14 @@ export default function SantriDashboard() {
         </div>
       </div>
 
-      {/* Recent Izin */}
       <div className="bg-white rounded-lg shadow">
         <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">Riwayat Izin Terbaru</h2>
+          <h2 className="text-xl font-semibold text-gray-900">Riwayat Izin Anda</h2>
         </div>
         <div className="p-6">
           {loading ? (
             <div className="text-center py-8">
-              <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+              <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
             </div>
           ) : izinList.length === 0 ? (
             <div className="text-center py-8 text-gray-500">

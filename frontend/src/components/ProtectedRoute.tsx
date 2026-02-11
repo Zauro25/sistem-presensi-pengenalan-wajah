@@ -1,10 +1,15 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 
-export default function ProtectedRoute({ children, allowedRoles = [] }) {
+interface ProtectedRouteProps {
+  children: ReactNode;
+  allowedRoles?: string[];
+}
+
+export default function ProtectedRoute({ children, allowedRoles = [] }: ProtectedRouteProps) {
   const { user, role, loading } = useAuth();
   const router = useRouter();
 
@@ -13,7 +18,6 @@ export default function ProtectedRoute({ children, allowedRoles = [] }) {
       if (!user) {
         router.push('/login');
       } else if (allowedRoles.length > 0 && !allowedRoles.includes(role)) {
-        // Redirect to appropriate dashboard
         if (role === 'pengurus') {
           router.push('/pengurus/dashboard');
         } else {

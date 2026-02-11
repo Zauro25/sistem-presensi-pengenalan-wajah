@@ -1,25 +1,47 @@
-// Centralized API client for backend communication
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+interface RequestOptions extends RequestInit {
+  skipAuth?: boolean;
+}
 
-class ApiClient {
-  constructor() {
-    this.baseURL = API_BASE_URL;
+interface ApiError extends Error {
+  status?: number;
+  data?: any;
+}
+
+function getApiBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
   }
 
-  getToken() {
+  if (typeof window !== 'undefined') {
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    return `${protocol}//${hostname}:8000/api`;
+  }
+
+  return 'http://localhost:8000/api';
+}
+
+class ApiClient {
+  baseURL: string;
+
+  constructor() {
+    this.baseURL = getApiBaseUrl();
+  }
+
+  getToken(): string | null {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('token');
     }
     return null;
   }
 
-  setToken(token) {
+  setToken(token: string): void {
     if (typeof window !== 'undefined') {
       localStorage.setItem('token', token);
     }
   }
 
-  removeToken() {
+  removeToken(): void {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
@@ -27,11 +49,11 @@ class ApiClient {
     }
   }
 
-  async request(endpoint, options = {}) {
+  async request(endpoint: string, options: RequestOptions = {}): Promise<any> {
     const token = this.getToken();
-    const headers = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...options.headers,
+      ...(options.headers as Record<string, string>),
     };
 
     if (token && !options.skipAuth) {
@@ -48,7 +70,7 @@ class ApiClient {
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        const error = new Error(data.message || data.error || 'Request failed');
+        const error = new Error(data.message || data.error || 'Request failed') as ApiError;
         error.status = response.status;
         error.data = data;
         throw error;
@@ -56,7 +78,8 @@ class ApiClient {
 
       return data;
     } catch (error) {
-      if (error.status === 401) {
+      const apiError = error as ApiError;
+      if (apiError.status === 401) {
         this.removeToken();
         if (typeof window !== 'undefined') {
           window.location.href = '/login';
@@ -66,9 +89,9 @@ class ApiClient {
     }
   }
 
-  async uploadFile(endpoint, formData) {
+  async uploadFile(endpoint: string, formData: FormData): Promise<any> {
     const token = this.getToken();
-    const headers = {};
+    const headers: Record<string, string> = {};
 
     if (token) {
       headers['Authorization'] = `Token ${token}`;
@@ -93,8 +116,7 @@ class ApiClient {
     return data;
   }
 
-  // AUTH APIs
-  async login(username, password) {
+  async login(username: string, password: string): Promise<any> {
     return this.request('/login-token/', {
       method: 'POST',
       body: JSON.stringify({ username, password }),
@@ -102,7 +124,7 @@ class ApiClient {
     });
   }
 
-  async registerPengurus(data) {
+  async registerPengurus(data: any): Promise<any> {
     return this.request('/register-pengurus/', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -110,7 +132,7 @@ class ApiClient {
     });
   }
 
-  async registerSantri(data) {
+  async registerSantri(data: any): Promise<any> {
     return this.request('/register-santri/', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -118,29 +140,28 @@ class ApiClient {
     });
   }
 
-  async getUser() {
+  async getUser(): Promise<any> {
     return this.request('/user/', { method: 'GET' });
   }
 
-  async logout() {
+  async logout(): Promise<any> {
     const response = await this.request('/logout/', { method: 'POST' });
     this.removeToken();
     return response;
   }
 
-  // SANTRI APIs
-  async listSantri() {
+  async listSantri(): Promise<any> {
     return this.request('/santri/', { method: 'GET' });
   }
 
-  async uploadSantriFoto(santriId, fotoFile) {
+  async uploadSantriFoto(santriId: number | string, fotoFile: File): Promise<any> {
     const formData = new FormData();
-    formData.append('santri_id', santriId);
+    formData.append('santri_id', String(santriId));
     formData.append('foto', fotoFile);
     return this.uploadFile('/santri/upload-foto/', formData);
   }
 
-  async registrasiWajah(santriId, imageBase64) {
+  async registrasiWajah(santriId: number | string, imageBase64: string): Promise<any> {
     return this.request('/santri/registrasi-wajah/', {
       method: 'POST',
       body: JSON.stringify({
@@ -150,51 +171,48 @@ class ApiClient {
     });
   }
 
-  // IZIN APIs
-  async permohonanIzin(data) {
+  async permohonanIzin(data: any): Promise<any> {
     return this.request('/santri/izin/', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
-  async listIzinSantri() {
+  async listIzinSantri(): Promise<any> {
     return this.request('/santri/izin/list/', { method: 'GET' });
   }
 
-  async listPermohonanIzin() {
+  async listPermohonanIzin(): Promise<any> {
     return this.request('/izin/list/', { method: 'GET' });
   }
 
-  async validasiIzin(izinId, status, note = '') {
+  async validasiIzin(izinId: number | string, status: string, note: string = ''): Promise<any> {
     return this.request(`/izin/validasi/${izinId}/`, {
       method: 'POST',
       body: JSON.stringify({ status, note }),
     });
   }
 
-  // ABSENSI CONTROL APIs
-  async startAbsensi(tanggal, sesi) {
+  async startAbsensi(tanggal: string, sesi: string): Promise<any> {
     return this.request('/start-absensi/', {
       method: 'POST',
       body: JSON.stringify({ tanggal, sesi }),
     });
   }
 
-  async startTelat() {
+  async startTelat(): Promise<any> {
     return this.request('/start-telat/', {
       method: 'POST',
     });
   }
 
-  async endAbsensi() {
+  async endAbsensi(): Promise<any> {
     return this.request('/end-absensi/', {
       method: 'POST',
     });
   }
 
-  // RECOGNITION API
-  async recognizeAndAttend(imageBase64, kelas) {
+  async recognizeAndAttend(imageBase64: string, kelas: string): Promise<any> {
     return this.request('/recognize/', {
       method: 'POST',
       body: JSON.stringify({
@@ -204,8 +222,7 @@ class ApiClient {
     });
   }
 
-  // REKAP APIs
-  async getRekap(start, end, kelas = null) {
+  async getRekap(start: string, end: string, kelas: string | null = null): Promise<any> {
     const params = new URLSearchParams({ start, end });
     if (kelas && kelas !== 'All' && kelas !== 'Semua Kelas') {
       params.append('kelas', kelas);
@@ -213,14 +230,14 @@ class ApiClient {
     return this.request(`/rekap/?${params.toString()}`, { method: 'GET' });
   }
 
-  async exportXlsx(start, end, kelas = null) {
+  async exportXlsx(start: string, end: string, kelas: string | null = null): Promise<void> {
     const token = this.getToken();
     const params = new URLSearchParams({ start, end });
     if (kelas && kelas !== 'All' && kelas !== 'Semua Kelas') {
       params.append('kelas', kelas);
     }
 
-    const headers = {};
+    const headers: Record<string, string> = {};
     if (token) {
       headers['Authorization'] = `Token ${token}`;
     }
@@ -244,15 +261,14 @@ class ApiClient {
     window.URL.revokeObjectURL(url);
   }
 
-  // REGISTRATION CODE APIs
-  async verifySantriName(santriName) {
+  async verifySantriName(santriName: string): Promise<any> {
     return this.request('/verify-santri/', {
       method: 'POST',
       body: JSON.stringify({ santri_name: santriName }),
     });
   }
 
-  async listRegistrationCodes() {
+  async listRegistrationCodes(): Promise<any> {
     return this.request('/registration-codes/', { method: 'GET' });
   }
 }

@@ -37,8 +37,6 @@ export default function RegisterPage() {
     try {
       const response = await api.registerSantri(formData);
       setSuccess(true);
-      
-      // Redirect to login after 2 seconds
       setTimeout(() => {
         router.push('/login');
       }, 2000);
@@ -51,7 +49,7 @@ export default function RegisterPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-linear-to-br from-green-50 to-emerald-100 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8 text-center">
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -66,7 +64,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-secondary flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-8">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Registrasi Santri</h1>
@@ -79,7 +77,6 @@ export default function RegisterPage() {
             </div>
           )}
 
-          {/* Registration Code */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Kode Registrasi (Hubungi Tim Presensi) <span className="text-red-500">*</span>
@@ -89,14 +86,13 @@ export default function RegisterPage() {
               name="registration_code"
               value={formData.registration_code}
               onChange={handleChange}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent uppercase"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent uppercase"
               placeholder="Masukkan kode registrasi"
               required
             />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Nama */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Nama Lengkap <span className="text-red-500">*</span>
@@ -106,13 +102,12 @@ export default function RegisterPage() {
                 name="nama"
                 value={formData.nama}
                 onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                 placeholder="Nama Lengkap"
                 required
               />
             </div>
 
-            {/* Username */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Username <span className="text-red-500">*</span>
@@ -122,13 +117,12 @@ export default function RegisterPage() {
                 name="username"
                 value={formData.username}
                 onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                 placeholder="Username"
                 required
               />
             </div>
 
-            {/* Password */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Password <span className="text-red-500">*</span>
@@ -138,13 +132,12 @@ export default function RegisterPage() {
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                 placeholder="Buat password"
                 required
               />
             </div>
 
-            {/* Asal Daerah */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Asal Daerah <span className="text-red-500">*</span>
@@ -154,13 +147,12 @@ export default function RegisterPage() {
                 name="asal_daerah"
                 value={formData.asal_daerah}
                 onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                 placeholder="Daerah"
                 required
               />
             </div>
 
-            {/* Sektor */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Sektor <span className="text-red-500">*</span>
@@ -169,7 +161,7 @@ export default function RegisterPage() {
                 name="sektor"
                 value={formData.sektor}
                 onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                 required
               >
                 <option value="kepuh">Kepuh</option>
@@ -177,7 +169,6 @@ export default function RegisterPage() {
               </select>
             </div>
 
-            {/* Angkatan */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Angkatan <span className="text-red-500">*</span>
@@ -187,13 +178,12 @@ export default function RegisterPage() {
                 name="angkatan"
                 value={formData.angkatan}
                 onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                 placeholder="Contoh: 2023"
                 required
               />
             </div>
 
-            {/* Jenis Kelamin */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Jenis Kelamin <span className="text-red-500">*</span>
@@ -202,7 +192,7 @@ export default function RegisterPage() {
                 name="jenis_kelamin"
                 value={formData.jenis_kelamin}
                 onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                 required
               >
                 <option value="L">Laki-laki</option>
@@ -214,7 +204,7 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition disabled:bg-blue-300 disabled:cursor-not-allowed"
+            className="w-full bg-primary text-white py-3 rounded-lg font-semibold hover:bg-primary-700 transition disabled:bg-primary-300 disabled:cursor-not-allowed"
           >
             {loading ? 'Memproses...' : 'Daftar'}
           </button>
@@ -223,7 +213,7 @@ export default function RegisterPage() {
         <div className="mt-6 text-center">
           <p className="text-gray-600">
             Sudah punya akun?{' '}
-            <Link href="/login" className="text-blue-600 hover:text-blue-700 font-semibold">
+            <Link href="/login" className="text-primary hover:text-primary-700 font-semibold">
               Login
             </Link>
           </p>

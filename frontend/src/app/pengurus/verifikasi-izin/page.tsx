@@ -38,7 +38,7 @@ export default function VerifikasiIzinPage() {
       });
       setSelectedIzin(null);
       setNote('');
-      loadPendingIzin(); // Reload list
+      loadPendingIzin();
     } catch (error) {
       setMessage({ type: 'error', text: error.message || 'Gagal memvalidasi izin' });
     } finally {
@@ -64,7 +64,6 @@ export default function VerifikasiIzinPage() {
         <p className="text-gray-600 mt-2 text-center">Kelola permohonan izin santri</p>
       </div>
 
-      {/* Message */}
       {message.text && (
         <div className={`mb-6 px-4 py-3 rounded-lg ${
           message.type === 'success' 
@@ -75,14 +74,12 @@ export default function VerifikasiIzinPage() {
         </div>
       )}
 
-      {/* Pending Count */}
       <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
         <p className="text-yellow-800 font-medium">
           {pendingIzin.length} permohonan izin menunggu verifikasi
         </p>
       </div>
 
-      {/* Izin List */}
       <div className="bg-white rounded-lg shadow">
         <div className="px-6 py-4 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">Daftar Permohonan Izin</h2>
@@ -90,7 +87,7 @@ export default function VerifikasiIzinPage() {
         <div className="p-6">
           {loading ? (
             <div className="text-center py-8">
-              <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+              <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
             </div>
           ) : izinList.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
@@ -111,7 +108,7 @@ export default function VerifikasiIzinPage() {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {izinList.map((izin) => (
-                    <tr key={izin.id} className={selectedIzin?.id === izin.id ? 'bg-blue-50' : ''}>
+                    <tr key={izin.id} className={selectedIzin?.id === izin.id ? 'bg-secondary' : ''}>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">{izin.nama}</div>
                         <div className="text-sm text-gray-500">ID: {izin.santri_id}</div>
@@ -131,7 +128,7 @@ export default function VerifikasiIzinPage() {
                         {izin.status === 'Menunggu' ? (
                           <button
                             onClick={() => setSelectedIzin(izin)}
-                            className="text-blue-600 hover:text-blue-900 font-medium"
+                            className="bg-primary text-white hover:bg-green-800 font-medium px-3 py-1 rounded"
                           >
                             Proses
                           </button>
@@ -148,7 +145,6 @@ export default function VerifikasiIzinPage() {
         </div>
       </div>
 
-      {/* Validation Modal */}
       {selectedIzin && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
@@ -188,8 +184,8 @@ export default function VerifikasiIzinPage() {
               <textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                rows="3"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                rows={3}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                 placeholder="Tambahkan catatan jika diperlukan..."
               />
             </div>
@@ -200,14 +196,14 @@ export default function VerifikasiIzinPage() {
                 disabled={processing === selectedIzin.id}
                 className="flex-1 bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition disabled:bg-green-300"
               >
-                ✓ Setujui
+                Setujui
               </button>
               <button
                 onClick={() => handleValidasi(selectedIzin.id, 'Ditolak')}
                 disabled={processing === selectedIzin.id}
                 className="flex-1 bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-700 transition disabled:bg-red-300"
               >
-                ✕ Tolak
+                Tolak
               </button>
               <button
                 onClick={() => {

@@ -4,7 +4,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { api } from '@/lib/api';
 
 export default function PresensiPage() {
-  const [step, setStep] = useState('setup'); // 'setup', 'active', 'telat'
+  const [step, setStep] = useState('setup');
   const [kelas, setKelas] = useState('');
   const [tanggal, setTanggal] = useState('');
   const [sesi, setSesi] = useState('Subuh');
@@ -20,7 +20,6 @@ export default function PresensiPage() {
   const scanIntervalRef = useRef(null);
 
   useEffect(() => {
-    // Set today's date as default
     const today = new Date().toISOString().split('T')[0];
     setTanggal(today);
 
@@ -66,7 +65,6 @@ export default function PresensiPage() {
       setStep('active');
       await startCamera();
       startAutoScan();
-      // Trigger immediate first scan for faster detection
       captureAndRecognize();
     } catch (error) {
       setMessage({ type: 'error', text: error.message || 'Gagal memulai absensi' });
@@ -129,7 +127,6 @@ export default function PresensiPage() {
         text: `${response.santri.nama} - ${response.status}` 
       });
 
-      // Auto clear message after 3 seconds
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
     } catch (error) {
       setLastScan({
@@ -150,7 +147,6 @@ export default function PresensiPage() {
   }, [kelas, scanning]);
 
   const startAutoScan = useCallback(() => {
-    // Auto scan every 1 second
     scanIntervalRef.current = setInterval(() => {
       captureAndRecognize();
     }, 1000);
@@ -166,7 +162,6 @@ export default function PresensiPage() {
     return colors[status] || 'text-gray-600';
   };
 
-  // Draw bounding box overlay following last detection
   useEffect(() => {
     const video = videoRef.current;
     const overlay = overlayRef.current;
@@ -190,7 +185,6 @@ export default function PresensiPage() {
         <h1 className="text-3xl font-bold text-gray-900 text-center">Presensi</h1>
       </div>
 
-      {/* Message */}
       {message.text && (
         <div className={`mb-6 px-4 py-3 rounded-lg ${
           message.type === 'success' 
@@ -201,7 +195,6 @@ export default function PresensiPage() {
         </div>
       )}
 
-      {/* Setup Form */}
       {step === 'setup' && (
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Sesi Presensi</h2>
@@ -213,7 +206,7 @@ export default function PresensiPage() {
               <select
                 value={kelas}
                 onChange={(e) => setKelas(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
               >
                 <option value="">Pilih kelas</option>
                 <option value="Semua Kelas">Semua kelas</option>
@@ -232,7 +225,7 @@ export default function PresensiPage() {
                 type="date"
                 value={tanggal}
                 onChange={(e) => setTanggal(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
               />
             </div>
 
@@ -243,7 +236,7 @@ export default function PresensiPage() {
               <select
                 value={sesi}
                 onChange={(e) => setSesi(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
               >
                 <option value="Subuh">Subuh</option>
                 <option value="Sore">Sore</option>
@@ -254,17 +247,15 @@ export default function PresensiPage() {
 
           <button
             onClick={handleStartAbsensi}
-            className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition"
+            className="w-full bg-primary text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-700 transition"
           >
             Mulai
           </button>
         </div>
       )}
 
-      {/* Active/Telat State */}
       {(step === 'active' || step === 'telat') && (
         <div className="space-y-6">
-          {/* Session Info */}
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex justify-between items-center mb-4">
               <div>
@@ -296,7 +287,6 @@ export default function PresensiPage() {
             )}
           </div>
 
-          {/* Camera + Status Panel */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="md:col-span-2 bg-white rounded-lg shadow p-6">
               <div className="space-y-4">
@@ -311,7 +301,7 @@ export default function PresensiPage() {
                   {scanning && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
                       <div className="bg-white rounded-lg p-4">
-                        <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
                         <p className="text-sm mt-2">Memproses...</p>
                       </div>
                     </div>
@@ -319,7 +309,6 @@ export default function PresensiPage() {
                 </div>
                 <canvas ref={canvasRef} className="hidden" />
 
-                {/* Manual Capture Button */}
                 <button
                   onClick={captureAndRecognize}
                   disabled={scanning}
@@ -352,7 +341,6 @@ export default function PresensiPage() {
             </div>
           </div>
 
-          {/* Last Scan Result - kept as is in side panel */}
         </div>
       )}
     </div>

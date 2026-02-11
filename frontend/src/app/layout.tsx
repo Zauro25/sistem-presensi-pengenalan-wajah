@@ -1,4 +1,5 @@
 import { Geist, Geist_Mono } from "next/font/google";
+import { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 
@@ -12,12 +13,16 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata = {
-  title: "Sistem Absensi PPM",
-  description: "Sistem Absensi dengan Face Recognition",
+export const metadata: Metadata = {
+  title: "Sistem Presensi PPM",
+  description: "Sistem Presensi Face Recognition Pondok Pesantren Mahasiswa Ar-Royyaan Baitul Hamdi Yogyakarta",
 };
 
-export default function RootLayout({ children }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="id">
       <body

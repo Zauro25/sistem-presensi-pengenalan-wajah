@@ -69,7 +69,6 @@ export default function VerifySantriPage() {
         <h1 className="text-3xl font-bold text-gray-900 text-center">Verifikasi Data Santri</h1>
       </div>
 
-      {/* Message */}
       {message.text && (
         <div className={`mb-6 px-4 py-3 rounded-lg ${
           message.type === 'success' 
@@ -80,7 +79,6 @@ export default function VerifySantriPage() {
         </div>
       )}
 
-      {/* Verification Form */}
       <div className="bg-white rounded-lg shadow p-6 mb-8">
         
         <form onSubmit={handleVerify} className="space-y-6">
@@ -92,7 +90,7 @@ export default function VerifySantriPage() {
               type="text"
               value={santriName}
               onChange={(e) => setSantriName(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
               placeholder="Masukkan nama lengkap sesuai database"
               required
             />
@@ -101,14 +99,13 @@ export default function VerifySantriPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition disabled:bg-blue-300 disabled:cursor-not-allowed"
+            className="w-full bg-primary text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-700 transition disabled:bg-primary-300 disabled:cursor-not-allowed"
           >
             {loading ? 'Memverifikasi...' : 'Verifikasi Santri'}
           </button>
         </form>
       </div>
 
-      {/* Generated Code Display */}
       {registrationCode && (
         <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-lg shadow-lg p-6 mb-8">
           <div className="flex items-center mb-4">
@@ -128,7 +125,7 @@ export default function VerifySantriPage() {
               </div>
               <button
                 onClick={() => copyToClipboard(registrationCode.code)}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+                className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition"
               >
                 Salin Kode
               </button>
@@ -153,7 +150,6 @@ export default function VerifySantriPage() {
         </div>
       )}
 
-      {/* View All Codes Button */}
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold text-gray-900">Daftar Kode Registrasi</h2>
@@ -192,7 +188,7 @@ export default function VerifySantriPage() {
                           <span className="font-mono font-bold text-gray-900">{code.code}</span>
                           <button
                             onClick={() => copyToClipboard(code.code)}
-                            className="ml-2 text-blue-600 hover:text-blue-800"
+                            className="ml-2 text-primary hover:text-primary-800"
                             title="Salin kode"
                           >
                           </button>

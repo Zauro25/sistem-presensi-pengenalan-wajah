@@ -13,7 +13,6 @@ export default function HomePage() {
       if (!user) {
         router.push('/login');
       } else {
-        // Redirect based on role
         if (role === 'pengurus') {
           router.push('/pengurus/dashboard');
         } else {
