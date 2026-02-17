@@ -53,21 +53,21 @@ export default function PresensiPage() {
     }
   }, []);
 
-  const handleStartAbsensi = async () => {
+  const handleStartPresensi = async () => {
     if (!kelas || !tanggal || !sesi) {
       setMessage({ type: 'error', text: 'Lengkapi semua field terlebih dahulu' });
       return;
     }
 
     try {
-      await api.startAbsensi(tanggal, sesi);
-      setMessage({ type: 'success', text: 'Absensi dimulai! Aktifkan kamera untuk scan wajah.' });
+      await api.startPresensi(tanggal, sesi);
+      setMessage({ type: 'success', text: 'Presensi dimulai! Aktifkan kamera untuk scan wajah.' });
       setStep('active');
       await startCamera();
       startAutoScan();
       captureAndRecognize();
     } catch (error) {
-      setMessage({ type: 'error', text: error.message || 'Gagal memulai absensi' });
+      setMessage({ type: 'error', text: error.message || 'Gagal memulai presensi' });
     }
   };
 
@@ -81,16 +81,16 @@ export default function PresensiPage() {
     }
   };
 
-  const handleEndAbsensi = async () => {
+  const handleEndPresensi = async () => {
     try {
-      await api.endAbsensi();
-      setMessage({ type: 'success', text: 'Absensi selesai!' });
+      await api.endPresensi();
+      setMessage({ type: 'success', text: 'Presensi selesai!' });
       stopCamera();
       setStep('setup');
       setScanning(false);
       setLastScan(null);
     } catch (error) {
-      setMessage({ type: 'error', text: error.message || 'Gagal mengakhiri absensi' });
+      setMessage({ type: 'error', text: error.message || 'Gagal mengakhiri presensi' });
     }
   };
 
@@ -182,7 +182,7 @@ export default function PresensiPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 text-center">Presensi</h1>
+        <h1 className="text-3xl font-bold text-white text-center">Presensi</h1>
       </div>
 
       {message.text && (
@@ -246,7 +246,7 @@ export default function PresensiPage() {
           </div>
 
           <button
-            onClick={handleStartAbsensi}
+            onClick={handleStartPresensi}
             className="w-full bg-primary text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-700 transition"
           >
             Mulai
@@ -272,7 +272,7 @@ export default function PresensiPage() {
                   </button>
                 )}
                 <button
-                  onClick={handleEndAbsensi}
+                  onClick={handleEndPresensi}
                   className="bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-700 transition"
                 >
                   Selesai

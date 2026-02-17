@@ -193,8 +193,8 @@ class ApiClient {
     });
   }
 
-  async startAbsensi(tanggal: string, sesi: string): Promise<any> {
-    return this.request('/start-absensi/', {
+  async startPresensi(tanggal: string, sesi: string): Promise<any> {
+    return this.request('/start-presensi/', {
       method: 'POST',
       body: JSON.stringify({ tanggal, sesi }),
     });
@@ -206,8 +206,8 @@ class ApiClient {
     });
   }
 
-  async endAbsensi(): Promise<any> {
-    return this.request('/end-absensi/', {
+  async endPresensi(): Promise<any> {
+    return this.request('/end-presensi/', {
       method: 'POST',
     });
   }
@@ -254,7 +254,7 @@ class ApiClient {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'rekap_absensi.xlsx';
+    a.download = 'rekap_presensi.xlsx';
     document.body.appendChild(a);
     a.click();
     a.remove();

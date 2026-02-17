@@ -66,7 +66,7 @@ export default function VerifySantriPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 text-center">Verifikasi Data Santri</h1>
+        <h1 className="text-3xl font-bold text-white text-center">Verifikasi Data Santri</h1>
       </div>
 
       {message.text && (

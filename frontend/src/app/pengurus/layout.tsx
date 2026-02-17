@@ -11,6 +11,7 @@ export default function PengurusLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { user, logout } = useAuth();
   const [theme, setTheme] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     const saved = typeof window !== 'undefined' ? localStorage.getItem('theme') : null;
@@ -48,18 +49,51 @@ export default function PengurusLayout({ children }: { children: ReactNode }) {
 
   return (
     <ProtectedRoute allowedRoles={['pengurus']}>
-      <div className="min-h-screen" style={{ backgroundColor: 'var(--background)', color: 'var(--foreground)' }}>
-        <aside className="fixed top-0 left-0 z-40 w-64 h-screen transition-transform" style={{ backgroundColor: 'var(--sidebar-bg)', borderRight: '1px solid var(--sidebar-border)' }}>
+      <div className="min-h-screen" style={{ color: 'var(--foreground)' }}>
+        {/* Hamburger Button */}
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="md:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-primary text-white shadow-lg"
+          aria-label="Open sidebar"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+
+        {/* Backdrop Overlay */}
+        {sidebarOpen && (
+          <div
+            className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-40"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
+        <aside className={`fixed top-0 left-0 z-50 w-64 h-screen transition-transform ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } md:translate-x-0`} style={{ backgroundColor: 'var(--sidebar-bg)', borderRight: '1px solid var(--sidebar-border)' }}>
           <div className="h-full px-3 py-4 overflow-y-auto">
+            {/* Close Button (Mobile Only) */}
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="md:hidden absolute top-4 right-4 p-1.5 rounded-lg hover:bg-gray-200 text-gray-600"
+              aria-label="Close sidebar"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
             <div className="mb-6 px-3">
               <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold text-primary text-center">Sistem Presensi PPM</h2>
+                <h2 className={`text-2xl font-bold text-center ${theme === 'dark' ? 'text-white' : 'text-primary'}`}>
+                  Sistem Presensi PPM
+                </h2>
               </div>
             </div>
 
             <div className="mb-6 px-3 py-3 bg-secondary rounded-lg">
-              <p className="text-sm font-semibold text-gray-900 text-center">{user?.username}</p>
-              <p className="text-xs text-gray-600 text-center">Pengurus</p>
+              <p className="text-sm font-semibold text-white text-center">{user?.username}</p>
+              <p className="text-xs text-white text-center">Pengurus</p>
             </div>
 
             <nav className="space-y-2">
@@ -67,6 +101,7 @@ export default function PengurusLayout({ children }: { children: ReactNode }) {
                 <Link
                   key={item.path}
                   href={item.path}
+                  onClick={() => setSidebarOpen(false)}
                   className={`flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
                     pathname === item.path
                       ? 'bg-primary-100 text-primary-700'
@@ -90,8 +125,8 @@ export default function PengurusLayout({ children }: { children: ReactNode }) {
           </div>
         </aside>
 
-        <div className="ml-64">
-          <main className="p-8">
+        <div className="md:ml-64">
+          <main className="p-8 pt-20 md:pt-8">
             {children}
           </main>
           <div className="fixed bottom-4 right-4 z-50">

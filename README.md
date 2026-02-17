@@ -85,7 +85,7 @@ NEXT_PUBLIC_API_URL=http://127.0.0.1:8000/api
 ## Deployment
 
 - Nginx reverse proxy config: [deploy/nginx/nginx.conf](deploy/nginx/nginx.conf)
-- Systemd service example: [deploy/systemd/absensi-backend.service](deploy/systemd/absensi-backend.service)
+- Systemd service example: [deploy/systemd/presensi-backend.service](deploy/systemd/presensi-backend.service)
 - `docker-compose.yml` maps backend port `8000` and Nginx on host `80`; media is mounted read-only into Nginx.
 
 ## Coding Standards

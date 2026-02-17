@@ -113,7 +113,7 @@ export default function IzinPage() {
     <div>
       <div className="mb-8 flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 text-center">Pengajuan Izin</h1>
+          <h1 className="text-3xl font-bold text-white text-center">Pengajuan Izin</h1>
         </div>
       </div>
 

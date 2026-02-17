@@ -65,10 +65,10 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: 'var(--background)', color: 'var(--foreground)' }}>
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ color: 'var(--foreground)' }}>
       <div className="rounded-2xl shadow-xl w-full max-w-md p-8" style={{ backgroundColor: 'var(--surface)' }}>
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2" style={{ color: 'var(--foreground)' }}>Sistem Absensi PPM</h1>
+          <h1 className="text-3xl font-bold mb-2" style={{ color: 'var(--foreground)' }}>Sistem Presensi PPM</h1>
           <p className="text-gray-600">Silakan login untuk melanjutkan</p>
         </div>
 
@@ -112,7 +112,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-primary text-white py-3 rounded-lg font-semibold hover:bg-primary-700 transition disabled:bg-primary-300 disabled:cursor-not-allowed"
+            className="w-full bg-primary text-white py-3 rounded-lg font-semibold cursor-pointer hover:bg-primary-700 hover:brightness-95 transition disabled:bg-primary-300 disabled:cursor-not-allowed"
           >
             {loading ? 'Memproses...' : 'Login'}
           </button>

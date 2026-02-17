@@ -146,7 +146,7 @@ export default function FaceRegistrationPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 text-center">Registrasi Wajah</h1>
+        <h1 className="text-3xl font-bold text-white text-center">Registrasi Wajah</h1>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

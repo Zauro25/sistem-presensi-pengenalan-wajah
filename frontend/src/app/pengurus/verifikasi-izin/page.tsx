@@ -60,7 +60,7 @@ export default function VerifikasiIzinPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 text-center">Verifikasi Izin</h1>
+        <h1 className="text-3xl font-bold text-white text-center">Verifikasi Izin</h1>
         <p className="text-gray-600 mt-2 text-center">Kelola permohonan izin santri</p>
       </div>
 
