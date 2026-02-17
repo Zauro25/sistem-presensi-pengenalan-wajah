@@ -105,8 +105,8 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "Absensi PPM API",
-    "DESCRIPTION": "API untuk absensi, santri, izin, dan laporan",
+    "TITLE": "Presensi PPM API",
+    "DESCRIPTION": "API untuk presensi, santri, izin, dan laporan",
     "VERSION": "1.0.0",
 }
 

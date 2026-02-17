@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.AlterUniqueTogether(
-            name='absensi',
+            name='presensi',
             unique_together=set(),
         ),
         migrations.AlterUniqueTogether(
@@ -17,7 +17,7 @@ class Migration(migrations.Migration):
             unique_together=set(),
         ),
         migrations.AddField(
-            model_name='absensi',
+            model_name='presensi',
             name='kelas',
             field=models.CharField(blank=True, max_length=50, null=True),
         ),
@@ -27,7 +27,7 @@ class Migration(migrations.Migration):
             field=models.CharField(blank=True, max_length=50, null=True),
         ),
         migrations.AlterUniqueTogether(
-            name='absensi',
+            name='presensi',
             unique_together={('santri', 'kelas', 'tanggal', 'sesi')},
         ),
         migrations.AlterUniqueTogether(

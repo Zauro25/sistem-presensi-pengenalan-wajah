@@ -1,29 +1,29 @@
-from .models import Santri, Absensi, SuratIzin
+from .models import Santri, Presensi, SuratIzin
 from datetime import datetime
 
 def get_rekap_data(start, end, kelas=None):
     start_date = datetime.strptime(start, "%Y-%m-%d").date()
     end_date = datetime.strptime(end, "%Y-%m-%d").date()
 
-    absensi = Absensi.objects.filter(tanggal__range=(start_date, end_date)).select_related("santri")
+    presensi = Presensi.objects.filter(tanggal__range=(start_date, end_date)).select_related("santri")
     izin = SuratIzin.objects.filter(tanggal__range=(start_date, end_date)).select_related("santri")
 
     if kelas and kelas not in ["All", "Semua Kelas"]:
-        absensi = absensi.filter(kelas=kelas)
+        presensi = presensi.filter(kelas=kelas)
         izin = izin.filter(kelas=kelas)
 
     headers = []
-    all_tanggal = sorted(list(set(absensi.values_list("tanggal", flat=True)) | set(izin.values_list("tanggal", flat=True))))
+    all_tanggal = sorted(list(set(presensi.values_list("tanggal", flat=True)) | set(izin.values_list("tanggal", flat=True))))
     
     date_class_sessions = {}
     
     for t in all_tanggal:
-        sesi_absensi = set(absensi.filter(tanggal=t).values_list("sesi", flat=True))
+        sesi_presensi = set(presensi.filter(tanggal=t).values_list("sesi", flat=True))
         sesi_izin = set(izin.filter(tanggal=t).values_list("sesi", flat=True))
-        actual_sessions = sorted(list(sesi_absensi | sesi_izin), key=lambda x: ["Subuh", "Sore", "Malam"].index(x))
+        actual_sessions = sorted(list(sesi_presensi | sesi_izin), key=lambda x: ["Subuh", "Sore", "Malam"].index(x))
         
         for s in actual_sessions:
-            classes_on_date = set(absensi.filter(tanggal=t, sesi=s).values_list("kelas", flat=True))
+            classes_on_date = set(presensi.filter(tanggal=t, sesi=s).values_list("kelas", flat=True))
             for cls in classes_on_date:
                 if cls:
                     date_class_sessions[(t, cls, s)] = True
@@ -34,9 +34,9 @@ def get_rekap_data(start, end, kelas=None):
     putra, putri = [], []
 
     if kelas and kelas not in ["All", "Semua Kelas"]:
-        santri_ids_absensi = set(absensi.values_list("santri_id", flat=True))
+        santri_ids_presensi = set(presensi.values_list("santri_id", flat=True))
         santri_ids_izin = set(izin.values_list("santri_id", flat=True))
-        santri_ids = santri_ids_absensi | santri_ids_izin
+        santri_ids = santri_ids_presensi | santri_ids_izin
         
         santri_list = Santri.objects.filter(id__in=santri_ids)
     else:
@@ -49,9 +49,9 @@ def get_rekap_data(start, end, kelas=None):
             tanggal = datetime.strptime(tanggal_str, "%Y-%m-%d").date()
             sesi = h["sesi"]
 
-            ab = absensi.filter(santri=s, tanggal=tanggal, sesi=sesi).first()
-            if ab:
-                row[h["col_key"]] = ab.status
+            pr = presensi.filter(santri=s, tanggal=tanggal, sesi=sesi).first()
+            if pr:
+                row[h["col_key"]] = pr.status
                 continue
 
             iz = izin.filter(santri=s, tanggal=tanggal, sesi=sesi, status="Disetujui").first()

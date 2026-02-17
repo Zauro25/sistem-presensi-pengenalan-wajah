@@ -4,7 +4,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('pengurus_app', '0003_alter_absensi_unique_together_and_more'),
+        ('pengurus_app', '0003_alter_presensi_unique_together_and_more'),
     ]
 
     operations = [

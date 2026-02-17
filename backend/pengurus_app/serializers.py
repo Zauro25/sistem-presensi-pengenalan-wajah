@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Santri, Absensi, SuratIzin
+from .models import Santri, Presensi, SuratIzin
 
 
 class RegisterSantriAccountSerializer(serializers.ModelSerializer):
@@ -58,11 +58,11 @@ class SantriSerializer(serializers.ModelSerializer):
         fields = ['id','santri_id','nama','asal_daerah','sektor','angkatan','jenis_kelamin','foto','face_encoding','kelas_list']
         
 
-class AbsensiSerializer(serializers.ModelSerializer):
+class PresensiSerializer(serializers.ModelSerializer):
     santri = SantriSerializer(read_only=True)
     santri_id = serializers.PrimaryKeyRelatedField(queryset=Santri.objects.all(), source='santri', write_only=True)
     class Meta:
-        model = Absensi
+        model = Presensi
         fields = ['id','santri','santri_id','kelas','tanggal','sesi','waktu_scan','status','created_by']
 
 class SuratIzinSerializer(serializers.ModelSerializer):

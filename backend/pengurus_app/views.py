@@ -1,8 +1,9 @@
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from django.utils import timezone
-from .models import Santri, Absensi, SuratIzin, RegistrationCode
+from .models import Santri, Presensi, SuratIzin, RegistrationCode
 from .serializers import SantriSerializer, SuratIzinSerializer, UserSerializer, RegisterSantriAccountSerializer
 from .face_utils import decode_base64_image, recognize_from_image_pil, encode_face_from_image
 from django.contrib.auth.models import User
@@ -32,7 +33,7 @@ def api_logout(request):
         pass
     return Response({"ok": True, "message": "Logout berhasil"})
 
-ABSENSI_KEY = "absensi_start_time"
+PRESENSI_KEY = "presensi_start_time"
 TELAT_KEY = "telat_start_time"
 
 @api_view(['POST'])
@@ -309,39 +310,39 @@ def api_santri_upload_foto(request):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def api_start_absensi(request):
+def api_start_presensi(request):
     tanggal = request.data.get("tanggal")
     sesi = request.data.get("sesi")
     if not tanggal or not sesi:
         return Response({"ok": False, "message": "Lengkapi tanggal & sesi"})
-    absensi_info = {
+    presensi_info = {
         "tanggal": tanggal,
         "sesi": sesi,
         "time": timezone.now().isoformat(),
         "telat_start": None
     }
-    cache.set(ABSENSI_KEY, absensi_info, 3600)
-    return Response({"ok": True, "message": "Absensi dimulai"})
+    cache.set(PRESENSI_KEY, presensi_info, 3600)
+    return Response({"ok": True, "message": "Presensi dimulai"})
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def api_start_telat(request):
-    absensi_info = cache.get(ABSENSI_KEY)
-    if not absensi_info:
-        return Response({"ok": False, "message": "Absensi belum dimulai"}, status=400)
+    presensi_info = cache.get(PRESENSI_KEY)
+    if not presensi_info:
+        return Response({"ok": False, "message": "Presensi belum dimulai"}, status=400)
 
-    absensi_info["telat_start"] = timezone.now().isoformat()
-    cache.set(ABSENSI_KEY, absensi_info, 3600)
+    presensi_info["telat_start"] = timezone.now().isoformat()
+    cache.set(PRESENSI_KEY, presensi_info, 3600)
     return Response({"ok": True, "message": "Penghitungan keterlambatan dimulai"})
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def api_end_absensi(request):
-    cache.delete(ABSENSI_KEY)
+def api_end_presensi(request):
+    cache.delete(PRESENSI_KEY)
     cache.delete(TELAT_KEY)
-    return Response({"ok": True, "message": "Absensi selesai"})
+    return Response({"ok": True, "message": "Presensi selesai"})
 
 
 
@@ -353,15 +354,15 @@ def api_recognize_and_attend(request):
         if not data_url:
             return Response({"ok": False, "message": "Image data tidak ditemukan"}, status=400)
             
-        absensi_info = cache.get(ABSENSI_KEY)
+        presensi_info = cache.get(PRESENSI_KEY)
         kelas = request.data.get("kelas") or "Kamu kelas apa?"
 
-        if not absensi_info:
-            return Response({"ok": False, "message": "Absensi belum dimulai"}, status=400)
+        if not presensi_info:
+            return Response({"ok": False, "message": "Presensi belum dimulai"}, status=400)
 
-        tanggal = absensi_info['tanggal']
-        sesi = absensi_info['sesi']
-        telat_start = absensi_info.get('telat_start')
+        tanggal = presensi_info['tanggal']
+        sesi = presensi_info['sesi']
+        telat_start = presensi_info.get('telat_start')
 
         pil_img = decode_base64_image(data_url)
         santri, info, location = recognize_from_image_pil(pil_img, min_prob=0.6)
@@ -377,7 +378,7 @@ def api_recognize_and_attend(request):
             status_code = 404 if info in {"low_confidence", "no_face"} else 400
             return Response({"ok": False, "message": message}, status=status_code)
 
-        status_absensi = "Hadir"
+        status_presensi = "Hadir"
         if telat_start:
             try:
                 telat_dt = datetime.datetime.fromisoformat(telat_start)
@@ -385,21 +386,21 @@ def api_recognize_and_attend(request):
                     telat_dt = timezone.make_aware(telat_dt)
                 diff = (timezone.now() - telat_dt).total_seconds() / 60
                 if diff <= 5:
-                    status_absensi = "T1"
+                    status_presensi = "T1"
                 elif diff <= 15:
-                    status_absensi = "T2"
+                    status_presensi = "T2"
                 else:
-                    status_absensi = "T3"
+                    status_presensi = "T3"
             except Exception as e:
                 pass
 
-        Absensi.objects.update_or_create(
+        Presensi.objects.update_or_create(
             santri=santri,
             tanggal=tanggal,
             sesi=sesi,
             kelas=kelas,
             defaults={
-                "status": status_absensi,
+                "status": status_presensi,
                 "kelas": kelas,
                 "created_by": request.user
             }
@@ -412,7 +413,7 @@ def api_recognize_and_attend(request):
             "ok": True,
             "santri": {"id": santri.id, "nama": santri.nama},
             "kelas": kelas,
-            "status": status_absensi,
+            "status": status_presensi,
             "location": {
                 "top": location[0],
                 "right": location[1],
@@ -495,7 +496,7 @@ def api_export_xlsx(request):
 
     output.seek(0)
     response = HttpResponse(output.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = 'attachment; filename=rekap_absensi.xlsx'
+    response['Content-Disposition'] = 'attachment; filename=rekap_presensi.xlsx'
     return response
 
 

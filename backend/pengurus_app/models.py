@@ -36,7 +36,7 @@ class Santri(models.Model):
         return kelas in self.kelas_list if self.kelas_list else False
 
 
-class Absensi(models.Model):
+class Presensi(models.Model):
     SESI_CHOICES = [('Subuh','Subuh'), ('Sore','Sore'), ('Malam','Malam')]
     STATUS_CHOICES = [('Hadir','Hadir'),('T1','T1'),('T2','T2'),('T3','T3')]
 
