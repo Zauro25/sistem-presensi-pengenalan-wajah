@@ -56,7 +56,7 @@ export default function PengurusDashboard() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
           )},
           { label: 'Santri Putri', value: stats.putri, icon: (
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l-2-2m0 0l-2 2m2-2v6m4-6l-2-2m0 0l-2 2m2-2v6m-7-6a7 7 0 1114 0 7 7 0 01-14 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
           )},
           { label: 'Perizinan', value: stats.pendingIzin, icon: (
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />

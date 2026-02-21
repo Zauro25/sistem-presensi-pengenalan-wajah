@@ -237,6 +237,84 @@ export default function RekapPage() {
                 </div>
               </div>
             </div>
+
+            {/* Tabel Rekap Gabungan */}
+            {(rekapData.putra?.length > 0 || rekapData.putri?.length > 0) && (
+              <div className="bg-white rounded-lg shadow">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h2 className="text-xl font-semibold text-gray-900">Rekap Semua Santri</h2>
+                </div>
+                <div className="p-6 overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50">
+                          Nama
+                        </th>
+                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Jenis Kelamin
+                        </th>
+                        {rekapData.headers && rekapData.headers.map((header, idx) => (
+                          <th key={idx} className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                            {header.col_key}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {rekapData.putra && rekapData.putra.map((row, idx) => (
+                        <tr key={`putra-${idx}`}>
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900 sticky left-0 bg-white">
+                            {row.Nama}
+                          </td>
+                          <td className="px-4 py-3 text-center text-sm">
+                            <span className="px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                              Putra
+                            </span>
+                          </td>
+                          {rekapData.headers.map((header, hidx) => {
+                            const value = row[header.col_key] || '';
+                            return (
+                              <td key={hidx} className="px-4 py-3 text-center text-sm whitespace-nowrap">
+                                {value && value !== '' && (
+                                  <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(value)}`}>
+                                    {value}
+                                  </span>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                      {rekapData.putri && rekapData.putri.map((row, idx) => (
+                        <tr key={`putri-${idx}`}>
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900 sticky left-0 bg-white">
+                            {row.Nama}
+                          </td>
+                          <td className="px-4 py-3 text-center text-sm">
+                            <span className="px-2 py-1 rounded text-xs font-medium bg-pink-100 text-pink-800">
+                              Putri
+                            </span>
+                          </td>
+                          {rekapData.headers.map((header, hidx) => {
+                            const value = row[header.col_key] || '';
+                            return (
+                              <td key={hidx} className="px-4 py-3 text-center text-sm whitespace-nowrap">
+                                {value && value !== '' && (
+                                  <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(value)}`}>
+                                    {value}
+                                  </span>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="putra">

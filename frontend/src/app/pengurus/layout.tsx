@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import { api } from '@/lib/api';
 
 export default function PengurusLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -12,6 +13,7 @@ export default function PengurusLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const [theme, setTheme] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [pendingIzinCount, setPendingIzinCount] = useState(0);
 
   useEffect(() => {
     const saved = typeof window !== 'undefined' ? localStorage.getItem('theme') : null;
@@ -21,6 +23,35 @@ export default function PengurusLayout({ children }: { children: ReactNode }) {
     if (typeof document !== 'undefined') {
       document.documentElement.setAttribute('data-theme', initial);
     }
+  }, []);
+
+  // Fetch pending izin count
+  useEffect(() => {
+    const fetchPendingIzin = async () => {
+      try {
+        const response = await api.listPermohonanIzin();
+        const pendingCount = (response.data || []).filter((izin: any) => izin.status === 'Menunggu').length;
+        setPendingIzinCount(pendingCount);
+      } catch (error) {
+        console.error('Error fetching pending izin:', error);
+      }
+    };
+
+    fetchPendingIzin();
+    
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchPendingIzin, 30000);
+    
+    // Listen for custom event when izin is validated
+    const handleIzinValidated = () => {
+      fetchPendingIzin();
+    };
+    window.addEventListener('izinValidated', handleIzinValidated);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('izinValidated', handleIzinValidated);
+    };
   }, []);
 
   const toggleTheme = () => {
@@ -102,13 +133,18 @@ export default function PengurusLayout({ children }: { children: ReactNode }) {
                   key={item.path}
                   href={item.path}
                   onClick={() => setSidebarOpen(false)}
-                  className={`flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
+                  className={`flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
                     pathname === item.path
                       ? 'bg-primary-100 text-primary-700'
                       : 'text-gray-700 hover:bg-gray-100'
                   }`}
                 >
-                  {item.name}
+                  <span>{item.name}</span>
+                  {item.name === 'Verifikasi Izin' && pendingIzinCount > 0 && (
+                    <span className="ml-2 px-2 py-1 text-xs font-bold text-white bg-red-500 rounded-full">
+                      {pendingIzinCount}
+                    </span>
+                  )}
                 </Link>
               ))}
             </nav>

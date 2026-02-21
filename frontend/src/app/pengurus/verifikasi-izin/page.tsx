@@ -39,6 +39,11 @@ export default function VerifikasiIzinPage() {
       setSelectedIzin(null);
       setNote('');
       loadPendingIzin();
+      
+      // Trigger event to update sidebar badge
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('izinValidated'));
+      }
     } catch (error) {
       setMessage({ type: 'error', text: error.message || 'Gagal memvalidasi izin' });
     } finally {
@@ -73,12 +78,6 @@ export default function VerifikasiIzinPage() {
           {message.text}
         </div>
       )}
-
-      <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-        <p className="text-yellow-800 font-medium">
-          {pendingIzin.length} permohonan izin menunggu verifikasi
-        </p>
-      </div>
 
       <div className="bg-white rounded-lg shadow">
         <div className="px-6 py-4 border-b border-gray-200">

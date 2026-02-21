@@ -230,8 +230,14 @@ export default function IzinPage() {
       )}
 
       <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200">
+        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
           <h2 className="text-xl font-semibold text-gray-900">Riwayat Permohonan Izin</h2>
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="bg-green-300 text-gray-800 px-6 py-3 rounded-lg font-semibold hover:bg-green-700 hover:text-white transition-all duration-300"
+          >
+            {showForm ? 'Tutup Form' : 'Ajukan Izin'}
+          </button>
         </div>
         <div className="p-6">
           {loadingList ? (
@@ -278,15 +284,6 @@ export default function IzinPage() {
             </div>
           )}
         </div>
-      </div>
-      
-      <div className="mt-6 flex justify-center">
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="bg-primary text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-700 transition"
-        >
-          {showForm ? 'Tutup Form' : 'Ajukan Izin'}
-        </button>
       </div>
     </div>
   );
