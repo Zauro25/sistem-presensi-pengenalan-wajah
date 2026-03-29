@@ -10,14 +10,17 @@ export default function PresensiPage() {
   const [sesi, setSesi] = useState('Subuh');
   const [message, setMessage] = useState({ type: '', text: '' });
   const [scanning, setScanning] = useState(false);
-  const [lastScan, setLastScan] = useState(null);
-  const [lastBox, setLastBox] = useState(null);
+  const [scanResult, setScanResult] = useState<any>(null);
+  const [lastBoxes, setLastBoxes] = useState<any[]>([]);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const overlayRef = useRef(null);
   const streamRef = useRef(null);
-  const scanIntervalRef = useRef(null);
+  const processingRef = useRef(false);
+  const nextScanAtRef = useRef(0);
+  const scanRafRef = useRef<number | null>(null);
+  const captureSizeRef = useRef({ w: 640, h: 480 });
 
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
@@ -33,9 +36,27 @@ export default function PresensiPage() {
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { facingMode: 'user', width: 640, height: 480 } 
       });
+      streamRef.current = stream;
+
+      const attachStream = (retry = 0) => {
+        if (!streamRef.current || streamRef.current !== stream) return;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.muted = true;
+          videoRef.current.play().catch(() => {});
+          return;
+        }
+        if (retry < 20) {
+          setTimeout(() => attachStream(retry + 1), 100);
+        }
+      };
+
+      attachStream();
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        streamRef.current = stream;
+        videoRef.current.muted = true;
+        await videoRef.current.play().catch(() => {});
       }
     } catch (error) {
       setMessage({ type: 'error', text: 'Tidak dapat mengakses kamera' });
@@ -47,10 +68,13 @@ export default function PresensiPage() {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
-    if (scanIntervalRef.current) {
-      clearInterval(scanIntervalRef.current);
-      scanIntervalRef.current = null;
+    if (scanRafRef.current !== null) {
+      cancelAnimationFrame(scanRafRef.current);
+      scanRafRef.current = null;
     }
+    processingRef.current = false;
+    nextScanAtRef.current = 0;
+    setScanning(false);
   }, []);
 
   const handleStartPresensi = async () => {
@@ -63,13 +87,16 @@ export default function PresensiPage() {
       await api.startPresensi(tanggal, sesi);
       setMessage({ type: 'success', text: 'Presensi dimulai! Aktifkan kamera untuk scan wajah.' });
       setStep('active');
-      await startCamera();
-      startAutoScan();
-      captureAndRecognize();
     } catch (error) {
       setMessage({ type: 'error', text: error.message || 'Gagal memulai presensi' });
     }
   };
+
+  useEffect(() => {
+    if (step === 'active' || step === 'telat') {
+      startCamera();
+    }
+  }, [step, startCamera]);
 
   const handleStartTelat = async () => {
     try {
@@ -88,52 +115,93 @@ export default function PresensiPage() {
       stopCamera();
       setStep('setup');
       setScanning(false);
-      setLastScan(null);
+      setScanResult(null);
+      setLastBoxes([]);
     } catch (error) {
       setMessage({ type: 'error', text: error.message || 'Gagal mengakhiri presensi' });
     }
   };
 
   const captureAndRecognize = useCallback(async () => {
-    if (!videoRef.current || !canvasRef.current || scanning) return;
+    if (!videoRef.current || !canvasRef.current || processingRef.current) return;
 
+    processingRef.current = true;
     setScanning(true);
 
     try {
       const video = videoRef.current;
       const canvas = canvasRef.current;
+
+      if (video.readyState < 2 || !video.videoWidth || !video.videoHeight) {
+        return;
+      }
+
       const context = canvas.getContext('2d');
-      
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      if (!context) {
+        return;
+      }
+
+      const sourceW = video.videoWidth;
+      const sourceH = video.videoHeight;
+      const targetW = Math.min(480, sourceW || 480);
+      const targetH = Math.max(1, Math.round((sourceH / sourceW) * targetW));
+
+      canvas.width = targetW;
+      canvas.height = targetH;
+      captureSizeRef.current = { w: targetW, h: targetH };
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
-      const imageData = canvas.toDataURL('image/jpeg');
+
+      const imageData = canvas.toDataURL('image/jpeg', 0.75);
       
       const response = await api.recognizeAndAttend(imageData, kelas);
-      
-      setLastScan({
+
+      const attendees = Array.isArray(response.attendees)
+        ? response.attendees
+        : (response.santri ? [{ santri: response.santri, status: response.status, confidence: response.confidence, location: response.location }] : []);
+
+      const nowText = new Date().toLocaleTimeString('id-ID');
+      setScanResult({
         success: true,
-        nama: response.santri.nama,
-        status: response.status,
-        time: new Date().toLocaleTimeString('id-ID'),
+        time: nowText,
+        attendees: attendees.map((a) => ({
+          nama: a.santri?.nama,
+          status: a.status,
+          confidence: typeof a.confidence === 'number' ? a.confidence : null,
+        })),
       });
-      if (response.location) {
-        setLastBox(response.location);
-      }
+
+      const mappedBoxes = attendees
+        .filter((a) => a.location)
+        .map((a) => ({
+          ...a.location,
+          confidence: typeof a.confidence === 'number' ? a.confidence : null,
+          nama: a.santri?.nama || null,
+        }));
+      setLastBoxes(mappedBoxes);
       
       setMessage({ 
         type: 'success', 
-        text: `${response.santri.nama} - ${response.status}` 
+        text: `${attendees.length} wajah tercatat` 
       });
 
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
     } catch (error) {
-      setLastScan({
+      const detections = Array.isArray(error?.data?.detections) ? error.data.detections : [];
+
+      setScanResult({
         success: false,
         message: error.message || 'Wajah tidak dikenali',
         time: new Date().toLocaleTimeString('id-ID'),
       });
+      setLastBoxes(
+        detections
+          .filter((d) => d.location)
+          .map((d) => ({
+            ...d.location,
+            confidence: typeof d.confidence === 'number' ? d.confidence : null,
+            nama: null,
+          }))
+      );
       
       setMessage({ 
         type: 'error', 
@@ -142,15 +210,47 @@ export default function PresensiPage() {
 
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
     } finally {
+      processingRef.current = false;
       setScanning(false);
+      nextScanAtRef.current = Date.now() + 400;
     }
-  }, [kelas, scanning]);
+  }, [kelas]);
 
   const startAutoScan = useCallback(() => {
-    scanIntervalRef.current = setInterval(() => {
-      captureAndRecognize();
-    }, 1000);
-  }, [captureAndRecognize]);
+    if (scanRafRef.current !== null) return;
+
+    const loop = async () => {
+      if (step === 'setup') {
+        scanRafRef.current = null;
+        return;
+      }
+
+      if (!streamRef.current) {
+        scanRafRef.current = requestAnimationFrame(loop);
+        return;
+      }
+
+      if (Date.now() >= nextScanAtRef.current && !processingRef.current) {
+        await captureAndRecognize();
+      }
+
+      scanRafRef.current = requestAnimationFrame(loop);
+    };
+
+    scanRafRef.current = requestAnimationFrame(loop);
+  }, [captureAndRecognize, step]);
+
+  useEffect(() => {
+    if (step === 'active' || step === 'telat') {
+      startAutoScan();
+      return;
+    }
+
+    if (scanRafRef.current !== null) {
+      cancelAnimationFrame(scanRafRef.current);
+      scanRafRef.current = null;
+    }
+  }, [step, startAutoScan]);
 
   const getStatusColor = (status) => {
     const colors = {
@@ -172,12 +272,49 @@ export default function PresensiPage() {
     overlay.height = vh;
     const ctx = overlay.getContext('2d');
     ctx.clearRect(0, 0, vw, vh);
-    if (!lastBox) return;
-    const { top, right, bottom, left } = lastBox;
-    ctx.strokeStyle = '#22c55e';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(left, top, right - left, bottom - top);
-  }, [lastBox]);
+    if (!lastBoxes || lastBoxes.length === 0) return;
+    const captureW = captureSizeRef.current.w || vw;
+    const captureH = captureSizeRef.current.h || vh;
+    const scaleX = vw / captureW;
+    const scaleY = vh / captureH;
+
+    for (const box of lastBoxes) {
+      const { top, right, bottom, left, confidence, nama } = box;
+      const scaledTop = top * scaleY;
+      const scaledRight = right * scaleX;
+      const scaledBottom = bottom * scaleY;
+      const scaledLeft = left * scaleX;
+
+      // Backend box uses raw capture coordinates; preview video is visually mirrored.
+      const drawLeft = vw - scaledRight;
+      const drawRight = vw - scaledLeft;
+      const drawWidth = drawRight - drawLeft;
+      const drawHeight = scaledBottom - scaledTop;
+      ctx.strokeStyle = '#22c55e';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(drawLeft, scaledTop, drawWidth, drawHeight);
+
+      const labelParts = [];
+      if (nama) labelParts.push(nama);
+      if (typeof confidence === 'number') labelParts.push(`${confidence.toFixed(1)}%`);
+      if (labelParts.length > 0) {
+        const label = labelParts.join(' - ');
+        ctx.font = 'bold 14px sans-serif';
+        const textWidth = ctx.measureText(label).width;
+        const textX = drawLeft;
+        const textY = Math.max(scaledTop - 10, 20);
+        const rectX = textX - 6;
+        const rectY = textY - 15;
+        const rectWidth = textWidth + 12;
+        const rectHeight = 20;
+
+        ctx.fillStyle = '#22c55e';
+        ctx.fillRect(rectX, rectY, rectWidth, rectHeight);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(label, textX, textY);
+      }
+    }
+  }, [lastBoxes]);
 
   return (
     <div>
@@ -295,44 +432,46 @@ export default function PresensiPage() {
                     ref={videoRef}
                     autoPlay
                     playsInline
+                    muted
                     className="w-full"
+                    style={{ transform: 'scaleX(-1)' }}
                   />
                   <canvas ref={overlayRef} className="absolute inset-0 w-full h-full" />
                   {scanning && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
-                      <div className="bg-white rounded-lg p-4">
-                        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
-                        <p className="text-sm mt-2">Memproses...</p>
-                      </div>
+                    <div className="absolute top-3 right-3 rounded-full bg-black/60 px-3 py-1 text-xs font-medium text-white">
+                      Memproses...
                     </div>
                   )}
                 </div>
                 <canvas ref={canvasRef} className="hidden" />
-
-                <button
-                  onClick={captureAndRecognize}
-                  disabled={scanning}
-                  className="w-full bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition disabled:bg-green-300"
-                >
-                  Scan Manual
-                </button>
+                <p className="text-sm text-gray-600">
+                  Status scanner: {scanning ? 'mendeteksi wajah...' : 'menunggu frame berikutnya'}
+                </p>
               </div>
             </div>
 
             <div className="bg-white rounded-lg shadow p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Status Kehadiran</h3>
-              {lastScan ? (
-                lastScan.success ? (
-                  <div className="space-y-2">
-                    <p className="font-semibold text-gray-900">{lastScan.nama}</p>
-                    <p className={`text-sm font-medium ${getStatusColor(lastScan.status)}`}>Status: {lastScan.status}</p>
-                    <p className="text-xs text-gray-500">{lastScan.time}</p>
+              {scanResult ? (
+                scanResult.success ? (
+                  <div className="space-y-3">
+                    <p className="text-sm text-green-700 font-medium">Terdeteksi {scanResult.attendees?.length || 0} orang</p>
+                    {(scanResult.attendees || []).map((a, idx) => (
+                      <div key={`${a.nama}-${idx}`} className="border border-gray-200 rounded-md p-2">
+                        <p className="font-semibold text-gray-900">{a.nama}</p>
+                        <p className={`text-sm font-medium ${getStatusColor(a.status)}`}>Status: {a.status}</p>
+                        {a.confidence !== null && (
+                          <p className="text-sm text-green-700">Akurasi: {a.confidence.toFixed(1)}%</p>
+                        )}
+                      </div>
+                    ))}
+                    <p className="text-xs text-gray-500">{scanResult.time}</p>
                   </div>
                 ) : (
                   <div className="space-y-2">
                     <p className="font-semibold text-red-900">Gagal</p>
-                    <p className="text-sm text-red-700">{lastScan.message}</p>
-                    <p className="text-xs text-gray-500">{lastScan.time}</p>
+                    <p className="text-sm text-red-700">{scanResult.message}</p>
+                    <p className="text-xs text-gray-500">{scanResult.time}</p>
                   </div>
                 )
               ) : (

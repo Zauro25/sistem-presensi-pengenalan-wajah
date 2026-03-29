@@ -4,12 +4,21 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/lib/api';
 
+const POSE_STEPS = [
+  { key: 'front', title: 'Hadap Depan', hint: 'Posisikan wajah lurus menghadap kamera' },
+  { key: 'right', title: 'Hadap Kanan', hint: 'Putar kepala sedikit ke kanan' },
+  { key: 'left', title: 'Hadap Kiri', hint: 'Putar kepala sedikit ke kiri' },
+  { key: 'up', title: 'Hadap Sedikit Atas', hint: 'Angkat dagu sedikit agar sudut atas wajah terekam' },
+  { key: 'down', title: 'Hadap Sedikit Bawah', hint: 'Turunkan dagu sedikit agar sudut bawah wajah terekam' },
+];
+
 const STATUS_COPY = {
-  idle: 'Detecting your face...',
-  detecting: 'Detecting your face...',
-  registering: 'Face detected. Registering...',
-  success: 'Registration successful',
-  error: 'Error: detection failed',
+  idle: 'Siapkan posisi wajah sesuai instruksi.',
+  detecting: 'Kamera siap. Ikuti instruksi pose saat ini.',
+  capturing: 'Mengambil pose...',
+  registering: 'Menyimpan data wajah...',
+  success: 'Registrasi wajah berhasil.',
+  error: 'Registrasi gagal. Coba ulangi pose.',
 };
 
 export default function FaceRegistrationPage() {
@@ -17,15 +26,14 @@ export default function FaceRegistrationPage() {
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('');
   const [processing, setProcessing] = useState(false);
-  const [box, setBox] = useState(null);
-  const [detectedName, setDetectedName] = useState('');
+  const [currentStep, setCurrentStep] = useState(0);
+  const [captures, setCaptures] = useState<Record<string, string>>({});
   const [lastScan, setLastScan] = useState(null);
 
   const videoRef = useRef(null);
   const captureCanvasRef = useRef(null);
   const overlayRef = useRef(null);
   const streamRef = useRef(null);
-  const nextScanAtRef = useRef(0);
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
@@ -64,84 +72,103 @@ export default function FaceRegistrationPage() {
     const overlay = overlayRef.current;
     const video = videoRef.current;
     if (!overlay || !video) return;
-    if (!box) {
-      const ctx = overlay.getContext('2d');
-      ctx.clearRect(0, 0, overlay.width, overlay.height);
-      return;
-    }
 
-    const { top, right, bottom, left } = box;
     const vw = video.videoWidth || 640;
     const vh = video.videoHeight || 480;
     overlay.width = vw;
     overlay.height = vh;
 
     const ctx = overlay.getContext('2d');
+    if (!ctx) return;
+
     ctx.clearRect(0, 0, vw, vh);
+    const centerX = vw / 2;
+    const centerY = vh / 2;
+    const boxW = Math.min(300, vw * 0.5);
+    const boxH = Math.min(360, vh * 0.7);
     ctx.strokeStyle = '#22c55e';
     ctx.lineWidth = 3;
-    ctx.strokeRect(left, top, right - left, bottom - top);
+    ctx.setLineDash([8, 6]);
+    ctx.strokeRect(centerX - boxW / 2, centerY - boxH / 2, boxW, boxH);
+    ctx.setLineDash([]);
+  }, [currentStep]);
 
-    if (detectedName) {
-      ctx.fillStyle = '#22c55e';
-      ctx.font = '16px sans-serif';
-      ctx.fillText(detectedName, left, Math.max(top - 8, 16));
-    }
-  }, [box, detectedName]);
-
-  const processFrame = useCallback(async () => {
-    const now = Date.now();
-    if (processing || now < nextScanAtRef.current) {
-      requestAnimationFrame(processFrame);
-      return;
-    }
+  const capturePose = useCallback(() => {
     const video = videoRef.current;
     const canvas = captureCanvasRef.current;
-    if (!video || !canvas) return;
-    if (video.readyState < 2) {
-      requestAnimationFrame(processFrame);
+    if (!video || !canvas || video.readyState < 2) {
+      setStatus('error');
+      setMessage('Kamera belum siap, tunggu sebentar lalu coba lagi.');
       return;
     }
-
-    setProcessing(true);
-    nextScanAtRef.current = Date.now() + 1000;
-    setStatus((prev) => (prev === 'success' ? prev : 'detecting'));
 
     const vw = video.videoWidth || 640;
     const vh = video.videoHeight || 480;
     canvas.width = vw;
     canvas.height = vh;
     const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    setStatus('capturing');
     ctx.drawImage(video, 0, 0, vw, vh);
     const dataUrl = canvas.toDataURL('image/jpeg');
 
+    const stepKey = POSE_STEPS[currentStep].key;
+    setCaptures((prev) => ({ ...prev, [stepKey]: dataUrl }));
+
+    if (currentStep < POSE_STEPS.length - 1) {
+      setCurrentStep((prev) => prev + 1);
+      setStatus('idle');
+      setMessage(`Pose ${POSE_STEPS[currentStep].title} tersimpan.`);
+    } else {
+      setStatus('idle');
+      setMessage('Semua pose sudah diambil. Klik Simpan Registrasi.');
+    }
+  }, [currentStep]);
+
+  const submitRegistration = useCallback(async () => {
+    const images = POSE_STEPS.map((s) => captures[s.key]).filter(Boolean);
+    if (images.length < POSE_STEPS.length) {
+      setStatus('error');
+      setMessage('Semua pose wajib diambil: depan, kanan, kiri.');
+      return;
+    }
+
     try {
       const santriId = user?.santri_id || user?.id;
+      setProcessing(true);
       setStatus('registering');
-      const res = await api.registrasiWajah(santriId, dataUrl);
+      const res = await api.registrasiWajah(santriId, images);
 
-      if (res?.location) {
-        setBox(res.location);
-      }
-      setDetectedName(res?.nama || user?.nama_lengkap || user?.username || 'Santri');
-      setMessage(res?.message || 'Registration successful');
       setStatus('success');
-      setLastScan({ success: true, nama: res?.nama || detectedName, time: new Date().toLocaleTimeString('id-ID') });
+      setMessage(res?.message || 'Registrasi berhasil.');
+      setLastScan({
+        success: true,
+        nama: res?.nama || user?.nama_lengkap || user?.username || 'Santri',
+        captured: res?.captured,
+        total: res?.total,
+        time: new Date().toLocaleTimeString('id-ID'),
+      });
     } catch (err) {
-      const errMsg = err?.message || err?.data?.error || 'Error: detection failed';
-      setMessage(errMsg);
+      const errMsg = err?.message || err?.data?.error || 'Registrasi gagal';
       setStatus('error');
-      setBox(null);
+      setMessage(errMsg);
       setLastScan({ success: false, message: errMsg, time: new Date().toLocaleTimeString('id-ID') });
     } finally {
       setProcessing(false);
-      requestAnimationFrame(processFrame);
     }
-  }, [processing, user, detectedName]);
+  }, [captures, user]);
 
-  useEffect(() => {
-    requestAnimationFrame(processFrame);
-  }, [processFrame]);
+  const resetSteps = useCallback(() => {
+    setCurrentStep(0);
+    setCaptures({});
+    setStatus('idle');
+    setMessage('');
+  }, []);
+
+  const currentPose = POSE_STEPS[currentStep];
+  const capturedCount = POSE_STEPS.filter((s) => Boolean(captures[s.key])).length;
+  const allCaptured = capturedCount === POSE_STEPS.length;
 
   return (
     <div className="space-y-6">
@@ -158,6 +185,7 @@ export default function FaceRegistrationPage() {
               autoPlay
               playsInline
               muted
+              style={{ transform: 'scaleX(-1)' }}
             />
             <canvas
               ref={overlayRef}
@@ -165,9 +193,57 @@ export default function FaceRegistrationPage() {
             />
           </div>
 
-          <div className="mt-4 text-center">
+          <div className="mt-4 space-y-3">
+            <div className="rounded-lg bg-green-50 border border-green-200 p-4">
+              <p className="text-sm font-semibold text-green-800">
+                Langkah {currentStep + 1}/{POSE_STEPS.length}: {currentPose.title}
+              </p>
+              <p className="text-sm text-green-700">{currentPose.hint}</p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {POSE_STEPS.map((step) => {
+                const done = Boolean(captures[step.key]);
+                return (
+                  <span
+                    key={step.key}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold ${done ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}
+                  >
+                    {done ? 'Tersimpan' : 'Belum'}: {step.title}
+                  </span>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={capturePose}
+                disabled={processing || (allCaptured && currentStep === POSE_STEPS.length - 1)}
+                className="bg-primary text-white px-5 py-2 rounded-lg font-semibold hover:bg-primary-700 transition disabled:bg-primary-300"
+              >
+                Ambil Pose Ini
+              </button>
+              <button
+                type="button"
+                onClick={submitRegistration}
+                disabled={processing || !allCaptured}
+                className="bg-green-600 text-white px-5 py-2 rounded-lg font-semibold hover:bg-green-700 transition disabled:bg-green-300"
+              >
+                Simpan Registrasi
+              </button>
+              <button
+                type="button"
+                onClick={resetSteps}
+                disabled={processing}
+                className="bg-gray-200 text-gray-800 px-5 py-2 rounded-lg font-semibold hover:bg-gray-300 transition"
+              >
+                Ulangi Pose
+              </button>
+            </div>
+
             <p className="text-sm text-gray-700 font-medium">
-              {STATUS_COPY[status] || 'Detecting your face...'}
+              {STATUS_COPY[status] || 'Siapkan posisi wajah sesuai instruksi.'}
             </p>
             {message && (
               <p className={`mt-2 text-sm ${status === 'success' ? 'text-green-600' : status === 'error' ? 'text-red-600' : 'text-gray-600'}`}>
@@ -183,7 +259,7 @@ export default function FaceRegistrationPage() {
             lastScan.success ? (
               <div className="space-y-2">
                 <p className="font-semibold text-gray-900">{lastScan.nama}</p>
-                <p className="text-sm text-green-600">Terdeteksi & tersimpan</p>
+                <p className="text-sm text-green-600">Terdeteksi & tersimpan ({lastScan.captured || capturedCount}/{lastScan.total || POSE_STEPS.length} pose)</p>
                 <p className="text-xs text-gray-500">{lastScan.time}</p>
               </div>
             ) : (

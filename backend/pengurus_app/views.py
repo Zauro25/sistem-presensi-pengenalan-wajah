@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 from django.utils import timezone
 from .models import Santri, Presensi, SuratIzin, RegistrationCode
 from .serializers import SantriSerializer, SuratIzinSerializer, UserSerializer, RegisterSantriAccountSerializer
-from .face_utils import decode_base64_image, recognize_from_image_pil, encode_face_from_image
+from .face_utils import decode_base64_image, recognize_from_image_pil, recognize_many_from_image_pil, encode_face_from_image, invalidate_face_model_cache
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework import generics, status
@@ -14,7 +14,7 @@ import datetime
 import pandas as pd
 from io import BytesIO
 from django.http import HttpResponse
-import face_recognition
+from PIL import Image
 from django.db import IntegrityError
 from openpyxl.styles import Alignment, Font, PatternFill
 from .utils import get_rekap_data
@@ -234,10 +234,23 @@ def api_santri_registrasi_wajah(request):
     try:
         santri_id = request.data.get("santri_id")
         image_data = request.data.get("image")
+        images_data = request.data.get("images")
 
-        if not santri_id or not image_data:
+        if not santri_id:
+            santri_profile = getattr(request.user, "santri_profile", None)
+            if santri_profile:
+                santri_id = santri_profile.id
+
+        has_images_list = isinstance(images_data, list) and len(images_data) > 0
+        if not santri_id:
             return Response(
-                {"error": "santri_id dan image wajib diisi"},
+                {"error": "santri_id tidak ditemukan. Gunakan akun santri atau kirim santri_id."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not image_data and not has_images_list:
+            return Response(
+                {"error": "image atau images wajib diisi"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -249,22 +262,49 @@ def api_santri_registrasi_wajah(request):
             except Santri.DoesNotExist:
                 return Response({"error": f"Santri dengan id {santri_id} tidak ditemukan"}, status=404)
 
-        pil_img = decode_base64_image(image_data)
-        
-        hog_encoding, face_location = encode_face_from_image(pil_img)
-        
-        if hog_encoding is None:
-            return Response({"error": "Wajah tidak ditemukan"}, status=400)
+        if has_images_list:
+            sample_images = images_data[:5]
+        else:
+            sample_images = [image_data]
 
-        santri.face_encoding = hog_encoding
+        encodings = []
+        last_location = None
+        failed_samples = 0
+
+        for sample in sample_images:
+            if not sample:
+                failed_samples += 1
+                continue
+
+            pil_img = decode_base64_image(sample)
+            hog_encoding, face_location = encode_face_from_image(pil_img)
+
+            if face_location == "detector_unavailable":
+                return Response({"error": "Detector wajah tidak tersedia di server"}, status=500)
+
+            if hog_encoding is None:
+                failed_samples += 1
+                continue
+
+            encodings.append(hog_encoding)
+            last_location = face_location
+
+        if len(encodings) == 0:
+            return Response({"error": "Wajah tidak ditemukan pada semua pose"}, status=400)
+
+        santri.face_encoding = encodings if len(encodings) > 1 else encodings[0]
         santri.save()
+        invalidate_face_model_cache()
 
-        top, right, bottom, left = face_location
+        top, right, bottom, left = last_location if last_location else (0, 0, 0, 0)
 
         return Response({
             "ok": True,
-            "message": f"Wajah {santri.nama} berhasil diregistrasi!",
+            "message": f"Wajah {santri.nama} berhasil diregistrasi ({len(encodings)}/{len(sample_images)} pose).",
             "nama": santri.nama,
+            "captured": len(encodings),
+            "total": len(sample_images),
+            "failed": failed_samples,
             "location": {"top": top, "right": right, "bottom": bottom, "left": left}
         })
 
@@ -290,18 +330,19 @@ def api_santri_upload_foto(request):
         santri.save()
 
         img_path = santri.foto.path
-        img = face_recognition.load_image_file(img_path)
-
-        from PIL import Image
-        pil_img = Image.fromarray(img)
+        pil_img = Image.open(img_path).convert("RGB")
         
         hog_encoding, face_location = encode_face_from_image(pil_img)
+
+        if face_location == "detector_unavailable":
+            return Response({"error": "Detector wajah tidak tersedia di server"}, status=500)
 
         if hog_encoding is None:
             return Response({"error": "Wajah tidak terdeteksi, coba gunakan foto yang lebih jelas"}, status=status.HTTP_400_BAD_REQUEST)
 
         santri.face_encoding = hog_encoding
         santri.save()
+        invalidate_face_model_cache()
 
         return Response({"success": True, "message": "Foto berhasil diupload & encoding disimpan"}, status=status.HTTP_200_OK)
 
@@ -365,18 +406,46 @@ def api_recognize_and_attend(request):
         telat_start = presensi_info.get('telat_start')
 
         pil_img = decode_base64_image(data_url)
-        santri, info, location = recognize_from_image_pil(pil_img, min_prob=0.6)
-        if not santri:
+        recognized, info, rejected, all_locations = recognize_many_from_image_pil(pil_img, min_prob=0.58, max_faces=5)
+        if not recognized:
             error_map = {
                 "no_face": "Wajah tidak terdeteksi, pastikan wajah terlihat jelas",
                 "no_dataset": "Belum ada dataset wajah yang terdaftar",
                 "not_enough_classes": "Minimal dua santri perlu diregistrasi agar model SVM bisa dilatih",
                 "low_confidence": "Wajah tidak cocok (confidence terlalu rendah)",
-                "not_found": "Profil santri tidak ditemukan"
+                "not_found": "Profil santri tidak ditemukan",
+                "detector_unavailable": "Detector wajah tidak tersedia di server"
             }
             message = error_map.get(info, "Wajah tidak cocok")
-            status_code = 404 if info in {"low_confidence", "no_face"} else 400
-            return Response({"ok": False, "message": message}, status=status_code)
+            status_code = 400
+            payload = {"ok": False, "message": message}
+            if rejected:
+                first = rejected[0]
+                location = first.get("location")
+                confidence = first.get("confidence")
+                if location:
+                    payload["location"] = {
+                        "top": location[0],
+                        "right": location[1],
+                        "bottom": location[2],
+                        "left": location[3]
+                    }
+                if confidence is not None:
+                    payload["confidence"] = round(float(confidence) * 100, 2)
+            payload["detections"] = [
+                {
+                    "location": {
+                        "top": d["location"][0],
+                        "right": d["location"][1],
+                        "bottom": d["location"][2],
+                        "left": d["location"][3],
+                    },
+                    "confidence": round(float(d["confidence"]) * 100, 2) if d.get("confidence") is not None else None,
+                    "info": d.get("info"),
+                }
+                for d in rejected[:5]
+            ]
+            return Response(payload, status=status_code)
 
         status_presensi = "Hadir"
         if telat_start:
@@ -394,32 +463,50 @@ def api_recognize_and_attend(request):
             except Exception as e:
                 pass
 
-        Presensi.objects.update_or_create(
-            santri=santri,
-            tanggal=tanggal,
-            sesi=sesi,
-            kelas=kelas,
-            defaults={
-                "status": status_presensi,
-                "kelas": kelas,
-                "created_by": request.user
-            }
-        )
-        
-        if kelas and kelas != "Kamu kelas apa?":
-            santri.assign_to_kelas(kelas)
+        attendees = []
+        for item in recognized:
+            santri = item["santri"]
+            location = item["location"]
+            confidence = item["confidence"]
 
+            Presensi.objects.update_or_create(
+                santri=santri,
+                tanggal=tanggal,
+                sesi=sesi,
+                kelas=kelas,
+                defaults={
+                    "status": status_presensi,
+                    "kelas": kelas,
+                    "created_by": request.user
+                }
+            )
+
+            if kelas and kelas != "Kamu kelas apa?":
+                santri.assign_to_kelas(kelas)
+
+            attendees.append({
+                "santri": {"id": santri.id, "nama": santri.nama},
+                "status": status_presensi,
+                "confidence": round(float(confidence) * 100, 2) if confidence is not None else None,
+                "location": {
+                    "top": location[0],
+                    "right": location[1],
+                    "bottom": location[2],
+                    "left": location[3]
+                }
+            })
+
+        primary = attendees[0]
         return Response({
             "ok": True,
-            "santri": {"id": santri.id, "nama": santri.nama},
             "kelas": kelas,
-            "status": status_presensi,
-            "location": {
-                "top": location[0],
-                "right": location[1],
-                "bottom": location[2],
-                "left": location[3]
-            }
+            "count": len(attendees),
+            "attendees": attendees,
+            # Backward-compatible fields
+            "santri": primary["santri"],
+            "status": primary["status"],
+            "confidence": primary["confidence"],
+            "location": primary["location"],
         })
     except Exception as e:
         return Response({"ok": False, "message": f"Error processing: {str(e)}"}, status=500)

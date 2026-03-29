@@ -161,13 +161,20 @@ class ApiClient {
     return this.uploadFile('/santri/upload-foto/', formData);
   }
 
-  async registrasiWajah(santriId: number | string, imageBase64: string): Promise<any> {
+  async registrasiWajah(santriId: number | string, imageBase64: string | string[]): Promise<any> {
+    const payload: Record<string, any> = {
+      santri_id: santriId,
+    };
+
+    if (Array.isArray(imageBase64)) {
+      payload.images = imageBase64;
+    } else {
+      payload.image = imageBase64;
+    }
+
     return this.request('/santri/registrasi-wajah/', {
       method: 'POST',
-      body: JSON.stringify({
-        santri_id: santriId,
-        image: imageBase64,
-      }),
+      body: JSON.stringify(payload),
     });
   }
 

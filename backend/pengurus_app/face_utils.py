@@ -1,12 +1,169 @@
 import base64
 from io import BytesIO
-import face_recognition
 import numpy as np
 from PIL import Image
 from sklearn.svm import SVC
+from sklearn.preprocessing import StandardScaler
 from skimage.feature import hog
 import cv2
+import os
 from .models import Santri
+
+
+_MODEL_CACHE = {
+    "model": None,
+    "scaler": None,
+    "samples": None,
+    "labels": None,
+    "profiles": None,
+}
+
+
+def normalize_vector(vec):
+    arr = np.array(vec, dtype=float)
+    norm = float(np.linalg.norm(arr))
+    if norm <= 1e-12:
+        return arr
+    return arr / norm
+
+
+def merge_encodings(encodings):
+    if not encodings:
+        return None
+    arr = np.array([normalize_vector(e) for e in encodings], dtype=float)
+    mean_vec = np.mean(arr, axis=0)
+    return normalize_vector(mean_vec).tolist()
+
+
+def invalidate_face_model_cache():
+    _MODEL_CACHE["model"] = None
+    _MODEL_CACHE["scaler"] = None
+    _MODEL_CACHE["samples"] = None
+    _MODEL_CACHE["labels"] = None
+    _MODEL_CACHE["profiles"] = None
+
+
+def _build_cascade_candidates():
+    bases = []
+    data_dir = getattr(cv2, "data", None)
+    if data_dir and getattr(data_dir, "haarcascades", None):
+        bases.append(data_dir.haarcascades)
+    bases.extend([
+        "/usr/share/opencv4/haarcascades/",
+        "/usr/local/share/opencv4/haarcascades/",
+        "/opt/homebrew/opt/opencv/share/opencv4/haarcascades/",
+    ])
+
+    filenames = [
+        "haarcascade_frontalface_default.xml",
+        "haarcascade_frontalface_alt2.xml",
+        "haarcascade_profileface.xml",
+    ]
+
+    candidates = []
+    for base in bases:
+        for name in filenames:
+            candidates.append(os.path.join(base, name))
+    return candidates
+
+
+def _load_face_cascades():
+    cascades = []
+    for candidate in _build_cascade_candidates():
+        if not os.path.exists(candidate):
+            continue
+        cascade = cv2.CascadeClassifier(candidate)
+        if cascade is not None and not cascade.empty():
+            cascades.append(cascade)
+    return cascades
+
+
+FACE_CASCADES = _load_face_cascades()
+
+
+def _to_location(x, y, w, h):
+    # Convert OpenCV rect (x, y, w, h) into (top, right, bottom, left)
+    return (int(y), int(x + w), int(y + h), int(x))
+
+
+def _detect_with_cascade(img_gray):
+    if not FACE_CASCADES:
+        return None
+
+    found = []
+    for cascade in FACE_CASCADES:
+        faces = cascade.detectMultiScale(
+            img_gray,
+            scaleFactor=1.08,
+            minNeighbors=4,
+            minSize=(32, 32),
+            flags=cv2.CASCADE_SCALE_IMAGE,
+        )
+        if len(faces) == 0:
+            continue
+
+        for x, y, w, h in faces:
+            found.append((int(x), int(y), int(w), int(h)))
+
+    if not found:
+        return []
+
+    # Deduplicate near-identical rectangles and keep larger faces first.
+    found.sort(key=lambda r: r[2] * r[3], reverse=True)
+    deduped = []
+    for rect in found:
+        x, y, w, h = rect
+        cx = x + (w // 2)
+        cy = y + (h // 2)
+        keep = True
+        for ex, ey, ew, eh in deduped:
+            ecx = ex + (ew // 2)
+            ecy = ey + (eh // 2)
+            if abs(cx - ecx) < 24 and abs(cy - ecy) < 24:
+                keep = False
+                break
+        if keep:
+            deduped.append(rect)
+
+    return [_to_location(*r) for r in deduped[:6]]
+
+
+def detect_face_locations_robust(img_rgb):
+    # Multi-pass detection: native, equalized, and upscaled grayscale.
+    gray = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2GRAY)
+    gray_eq = cv2.equalizeHist(gray)
+
+    trial_images = [
+        (gray, 1.0),
+        (gray_eq, 1.0),
+    ]
+
+    if img_rgb.shape[1] < 1000:
+        gray_big = cv2.resize(gray_eq, None, fx=1.4, fy=1.4, interpolation=cv2.INTER_LINEAR)
+        trial_images.append((gray_big, 1.4))
+
+    for trial_gray, scale in trial_images:
+        locations = _detect_with_cascade(trial_gray)
+        if locations is None:
+            return None
+        if not locations:
+            continue
+
+        if scale == 1.0:
+            return locations
+
+        inv = 1.0 / scale
+        remapped = []
+        for top, right, bottom, left in locations:
+            remapped.append((
+                int(top * inv),
+                int(right * inv),
+                int(bottom * inv),
+                int(left * inv),
+            ))
+        return remapped
+
+    return []
 
 def decode_base64_image(data_url):
     try:
@@ -19,34 +176,209 @@ def decode_base64_image(data_url):
     except Exception as e:
         raise ValueError(f"Failed to decode image: {str(e)}")
 
-def get_all_encodings():
-    enc_dict = {}
+def get_all_training_samples():
+    samples = []
+    labels = []
     for s in Santri.objects.exclude(face_encoding__isnull=True):
         try:
-            enc = np.array(s.face_encoding, dtype=float)
-            enc_dict[s.id] = enc
+            raw = s.face_encoding
+            if isinstance(raw, list) and len(raw) > 0 and isinstance(raw[0], list):
+                candidate_vectors = raw
+            else:
+                candidate_vectors = [raw]
+
+            for vec in candidate_vectors:
+                enc = normalize_vector(vec)
+                samples.append(enc)
+                labels.append(s.id)
         except Exception:
             continue
-    return enc_dict
+    return samples, labels
 
-def train_svm_classifier(enc_dict):
-    ids = list(enc_dict.keys())
-    if len(ids) < 2:
+def train_svm_classifier(samples, labels):
+    class_ids = sorted(set(labels))
+    if len(class_ids) < 2:
         return None, "not_enough_classes"
-    X = np.stack([enc_dict[i] for i in ids])
-    y = np.array(ids)
-    model = SVC(kernel="linear", probability=True)
-    model.fit(X, y)
-    return model, None
+    X = np.stack(samples)
+    y = np.array(labels)
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    model = SVC(kernel="rbf", C=10.0, gamma="scale", class_weight="balanced", probability=True)
+    model.fit(X_scaled, y)
+    return (model, scaler), None
 
-def predict_with_svm(model, face_enc, min_prob=0.6):
-    probs = model.predict_proba([face_enc])[0]
+
+def build_class_profiles(samples, labels):
+    profiles = {}
+    by_class = {}
+    for enc, sid in zip(samples, labels):
+        by_class.setdefault(sid, []).append(enc)
+
+    for sid, vectors in by_class.items():
+        arr = np.array(vectors, dtype=float)
+        centroid = np.mean(arr, axis=0)
+        centroid = normalize_vector(centroid)
+        dists = np.linalg.norm(arr - centroid, axis=1)
+        mean_dist = float(np.mean(dists)) if len(dists) > 0 else 0.0
+        std_dist = float(np.std(dists)) if len(dists) > 0 else 0.0
+        profiles[sid] = {
+            "centroid": centroid,
+            "mean_dist": mean_dist,
+            "std_dist": std_dist,
+        }
+
+    return profiles
+
+
+def get_trained_artifacts():
+    if _MODEL_CACHE["model"] is not None:
+        return _MODEL_CACHE["model"], _MODEL_CACHE["scaler"], _MODEL_CACHE["samples"], _MODEL_CACHE["labels"], _MODEL_CACHE["profiles"], None
+
+    samples, labels = get_all_training_samples()
+    if not samples:
+        return None, None, None, None, None, "no_dataset"
+    if len(set(labels)) < 2:
+        return None, None, None, None, None, "not_enough_classes"
+
+    trained, err = train_svm_classifier(samples, labels)
+    if err:
+        return None, None, None, None, None, err
+
+    model, scaler = trained
+    profiles = build_class_profiles(samples, labels)
+
+    _MODEL_CACHE["model"] = model
+    _MODEL_CACHE["scaler"] = scaler
+    _MODEL_CACHE["samples"] = samples
+    _MODEL_CACHE["labels"] = labels
+    _MODEL_CACHE["profiles"] = profiles
+    return model, scaler, samples, labels, profiles, None
+
+
+def nearest_distance_by_class(samples, labels, query_enc):
+    class_best = {}
+    for enc, sid in zip(samples, labels):
+        dist = float(np.linalg.norm(enc - query_enc))
+        prev = class_best.get(sid)
+        if prev is None or dist < prev:
+            class_best[sid] = dist
+    return sorted(class_best.items(), key=lambda item: item[1])
+
+
+def compute_hybrid_confidence(svm_prob, near_dist, dist_gap):
+    # Convert distance signals to [0, 1] then blend with SVM probability.
+    dist_score = np.clip((0.95 - float(near_dist)) / 0.55, 0.0, 1.0)
+    gap_score = np.clip((float(dist_gap) - 0.01) / 0.18, 0.0, 1.0)
+    prob_score = np.clip(float(svm_prob), 0.0, 1.0)
+    hybrid = (0.30 * prob_score) + (0.45 * dist_score) + (0.25 * gap_score)
+    return float(np.clip(hybrid, 0.0, 1.0))
+
+
+def calibrate_final_confidence(base_conf, near_dist, dist_gap):
+    final_conf = float(base_conf)
+    if near_dist <= 0.55 and dist_gap >= 0.06:
+        final_conf = max(final_conf, 0.78)
+    elif near_dist <= 0.62 and dist_gap >= 0.04:
+        final_conf = max(final_conf, 0.72)
+    elif near_dist <= 0.68 and dist_gap >= 0.03:
+        final_conf = max(final_conf, 0.67)
+    return float(np.clip(final_conf, 0.0, 1.0))
+
+
+def profile_confidence(predicted_pk, query_enc, profiles):
+    if not profiles or predicted_pk not in profiles:
+        return 0.0, 0.0
+
+    pred_profile = profiles[predicted_pk]
+    pred_dist = float(np.linalg.norm(query_enc - pred_profile["centroid"]))
+
+    # Adaptive tolerance per identity from intra-class spread.
+    tolerance = max(0.35, pred_profile["mean_dist"] + (2.5 * pred_profile["std_dist"]))
+    closeness = float(np.clip(1.0 - (pred_dist / tolerance), 0.0, 1.0))
+
+    other_dists = []
+    for sid, profile in profiles.items():
+        if sid == predicted_pk:
+            continue
+        other_dists.append(float(np.linalg.norm(query_enc - profile["centroid"])))
+
+    if not other_dists:
+        return closeness, 1.0
+
+    second = min(other_dists)
+    gap_score = float(np.clip((second - pred_dist) / 0.25, 0.0, 1.0))
+    return closeness, gap_score
+
+def predict_with_svm(model, scaler, face_enc, min_prob=0.58, min_margin=0.05):
+    face_scaled = scaler.transform([face_enc])
+    probs = model.predict_proba(face_scaled)[0]
     best_idx = int(np.argmax(probs))
     best_prob = float(probs[best_idx])
-    if best_prob < min_prob:
-        return None, best_prob
+    sorted_probs = np.sort(probs)
+    second_prob = float(sorted_probs[-2]) if len(sorted_probs) > 1 else 0.0
+    margin = best_prob - second_prob
+    if best_prob < min_prob or margin < min_margin:
+        return None, best_prob, margin
     best_pk = model.classes_[best_idx]
-    return int(best_pk), best_prob
+    return int(best_pk), best_prob, margin
+
+
+def _clip_face_box(location, h, w):
+    top, right, bottom, left = location
+    top = max(0, min(int(top), h - 1))
+    bottom = max(0, min(int(bottom), h))
+    left = max(0, min(int(left), w - 1))
+    right = max(0, min(int(right), w))
+    if bottom <= top or right <= left:
+        return None
+    return (top, right, bottom, left)
+
+
+def _classify_hog_features(hog_features, location, min_prob):
+    model, scaler, samples, labels, profiles, err = get_trained_artifacts()
+    if err:
+        return None, err, None
+
+    ranked_distances = nearest_distance_by_class(samples, labels, hog_features)
+    if not ranked_distances:
+        return None, "low_confidence", None
+
+    near_id, near_dist = ranked_distances[0]
+    second_dist = ranked_distances[1][1] if len(ranked_distances) > 1 else float("inf")
+    dist_gap = second_dist - near_dist
+
+    if near_dist > 0.8:
+        return None, "low_confidence", None
+
+    predicted_pk, prob, margin = predict_with_svm(model, scaler, hog_features, min_prob=min_prob)
+    hybrid_conf = compute_hybrid_confidence(prob, near_dist, dist_gap)
+    if predicted_pk is None:
+        if near_dist <= 0.68 and dist_gap >= 0.04:
+            predicted_pk = near_id
+            prob = max(float(hybrid_conf), 0.70)
+        else:
+            return None, "low_confidence", float(hybrid_conf)
+
+    if predicted_pk != near_id:
+        if near_dist > 0.7 or dist_gap < 0.02:
+            return None, "low_confidence", float(hybrid_conf)
+        predicted_pk = near_id
+
+    try:
+        santri = Santri.objects.get(pk=predicted_pk)
+    except Santri.DoesNotExist:
+        return None, "not_found", None
+
+    profile_close, profile_gap = profile_confidence(predicted_pk, hog_features, profiles)
+    prof_blend = (0.7 * profile_close) + (0.3 * profile_gap)
+    base_conf = (0.55 * max(float(prob), hybrid_conf)) + (0.45 * prof_blend)
+    final_conf = calibrate_final_confidence(base_conf, near_dist, dist_gap)
+
+    return {
+        "santri": santri,
+        "location": location,
+        "confidence": final_conf,
+    }, "ok", final_conf
 
 def extract_hog_features(face_img, resize_dim=(128, 128)):
     face_resized = cv2.resize(face_img, resize_dim)
@@ -63,43 +395,91 @@ def extract_hog_features(face_img, resize_dim=(128, 128)):
         visualize=False,
         feature_vector=True
     )
-    return hog_features
+    return normalize_vector(hog_features)
 
 def encode_face_from_image(pil_image):
     img = np.array(pil_image.convert("RGB"))
-    face_locations = face_recognition.face_locations(img, model='hog')
+    face_locations = detect_face_locations_robust(img)
+    if face_locations is None:
+        return None, "detector_unavailable"
     if not face_locations:
         return None, None
     top, right, bottom, left = face_locations[0]
+    h, w = img.shape[:2]
+    top = max(0, min(top, h - 1))
+    bottom = max(0, min(bottom, h))
+    left = max(0, min(left, w - 1))
+    right = max(0, min(right, w))
+    if bottom <= top or right <= left:
+        return None, None
     face_img = img[top:bottom, left:right]
     hog_features = extract_hog_features(face_img)
-    return hog_features.tolist(), face_locations[0]
+    return hog_features.tolist(), (top, right, bottom, left)
 
-def recognize_from_image_pil(pil_image, min_prob=0.6):
+def recognize_from_image_pil(pil_image, min_prob=0.58):
     try:
         img = np.array(pil_image.convert("RGB"))
-        face_locations = face_recognition.face_locations(img, model='hog')
+        face_locations = detect_face_locations_robust(img)
+        if face_locations is None:
+            return None, "detector_unavailable", None, None
         if not face_locations:
-            return None, "no_face", None
-        top, right, bottom, left = face_locations[0]
+            return None, "no_face", None, None
+        h, w = img.shape[:2]
+        clipped = _clip_face_box(face_locations[0], h, w)
+        if not clipped:
+            return None, "no_face", None, None
+        top, right, bottom, left = clipped
         face_img = img[top:bottom, left:right]
         hog_features = extract_hog_features(face_img)
-        db_encs = get_all_encodings()
-        if not db_encs:
-            return None, "no_dataset", None
-        model, train_error = train_svm_classifier(db_encs)
-        if train_error:
-            return None, train_error, None
-        predicted_pk, prob = predict_with_svm(model, hog_features, min_prob=min_prob)
-        if predicted_pk is None:
-            return None, "low_confidence", None
-        try:
-            santri = Santri.objects.get(pk=predicted_pk)
-        except Santri.DoesNotExist:
-            return None, "not_found", None
-        loc = face_locations[0]
-        return santri, prob, loc
+        result, info, conf = _classify_hog_features(hog_features, clipped, min_prob=min_prob)
+        if not result:
+            return None, info, clipped, conf
+        return result["santri"], "ok", result["location"], result["confidence"]
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return None, f"error: {str(e)}", None
+        return None, f"error: {str(e)}", None, None
+
+
+def recognize_many_from_image_pil(pil_image, min_prob=0.58, max_faces=5):
+    try:
+        img = np.array(pil_image.convert("RGB"))
+        face_locations = detect_face_locations_robust(img)
+        if face_locations is None:
+            return None, "detector_unavailable", [], []
+        if not face_locations:
+            return None, "no_face", [], []
+
+        h, w = img.shape[:2]
+        recognized = []
+        rejected = []
+        seen_ids = set()
+
+        for loc in face_locations[:max_faces]:
+            clipped = _clip_face_box(loc, h, w)
+            if not clipped:
+                continue
+            top, right, bottom, left = clipped
+            face_img = img[top:bottom, left:right]
+            hog_features = extract_hog_features(face_img)
+            result, info, conf = _classify_hog_features(hog_features, clipped, min_prob=min_prob)
+            if result and result["santri"].id not in seen_ids:
+                seen_ids.add(result["santri"].id)
+                recognized.append(result)
+            else:
+                rejected.append({
+                    "location": clipped,
+                    "info": info,
+                    "confidence": conf,
+                })
+
+        if recognized:
+            return recognized, "ok", rejected, face_locations
+
+        # Propagate higher-level errors when available.
+        first_info = rejected[0]["info"] if rejected else "low_confidence"
+        return None, first_info, rejected, face_locations
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return None, f"error: {str(e)}", [], []

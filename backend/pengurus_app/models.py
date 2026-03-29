@@ -35,6 +35,9 @@ class Santri(models.Model):
     def is_in_kelas(self, kelas):
         return kelas in self.kelas_list if self.kelas_list else False
 
+    class Meta:
+        db_table = 'santri'
+
 
 class Presensi(models.Model):
     SESI_CHOICES = [('Subuh','Subuh'), ('Sore','Sore'), ('Malam','Malam')]
@@ -49,6 +52,7 @@ class Presensi(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
 
     class Meta:
+        db_table = 'presensi'
         unique_together = ('santri', 'kelas', 'tanggal', 'sesi')
 
     def __str__(self):
@@ -66,6 +70,7 @@ class SuratIzin(models.Model):
     note = models.TextField(blank=True, null=True)
 
     class Meta:
+        db_table = 'suratizin'
         unique_together = ('santri', 'kelas', 'tanggal', 'sesi')
 
     def __str__(self):
@@ -91,7 +96,8 @@ class RegistrationCode(models.Model):
     def is_valid(self):
         return not self.used and timezone.now() < self.expires_at
 
-    def __str__(self):
-        return f"{self.code} - {self.santri_name} ({'Used' if self.used else 'Valid' if self.is_valid() else 'Expired'})"
+    class Meta:
+        db_table = 'registrationcode'
+
     def __str__(self):
         return f"{self.code} - {self.santri_name} ({'Used' if self.used else 'Valid' if self.is_valid() else 'Expired'})"
