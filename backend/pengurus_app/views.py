@@ -22,6 +22,36 @@ import os
 from django.conf import settings
 
 
+def _replace_presensi_record(santri, tanggal, sesi, kelas, status_presensi, created_by):
+    """Keep only one latest attendance row for the same santri+kelas+tanggal+sesi slot."""
+    qs = Presensi.objects.filter(
+        santri=santri,
+        tanggal=tanggal,
+        sesi=sesi,
+        kelas=kelas,
+    ).order_by('-id')
+
+    existing = qs.first()
+    if existing:
+        existing.status = status_presensi
+        existing.kelas = kelas
+        existing.created_by = created_by
+        existing.waktu_scan = timezone.now()
+        existing.save(update_fields=['status', 'kelas', 'created_by', 'waktu_scan'])
+        qs.exclude(id=existing.id).delete()
+        return existing
+
+    return Presensi.objects.create(
+        santri=santri,
+        tanggal=tanggal,
+        sesi=sesi,
+        kelas=kelas,
+        status=status_presensi,
+        created_by=created_by,
+        waktu_scan=timezone.now(),
+    )
+
+
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -116,14 +146,68 @@ def api_list_santri(request):
     santris = Santri.objects.all().order_by('santri_id')
     return Response({'ok': True, 'data': SantriSerializer(santris, many=True).data})
 
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def api_search_santri_for_deactivation(request):
+    if not request.user.is_staff:
+        return Response({'ok': False, 'message': 'Akses ditolak'}, status=403)
+
+    nama = (request.query_params.get('nama') or '').strip()
+    asal_daerah = (request.query_params.get('asal_daerah') or '').strip()
+
+    if not nama or not asal_daerah:
+        return Response(
+            {'ok': False, 'message': 'Nama lengkap dan asal daerah wajib diisi'},
+            status=400
+        )
+
+    santris = Santri.objects.filter(
+        nama__icontains=nama,
+        asal_daerah__icontains=asal_daerah
+    ).order_by('nama', 'santri_id')
+
+    if not santris.exists():
+        return Response({'ok': False, 'message': 'Santri tidak ditemukan', 'data': []}, status=404)
+
+    return Response({'ok': True, 'data': SantriSerializer(santris, many=True).data})
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def api_deactivate_santri(request, santri_id):
+    if not request.user.is_staff:
+        return Response({'ok': False, 'message': 'Akses ditolak'}, status=403)
+
+    try:
+        santri = Santri.objects.select_related('user').get(id=santri_id)
+    except Santri.DoesNotExist:
+        return Response({'ok': False, 'message': 'Santri tidak ditemukan'}, status=404)
+
+    santri_name = santri.nama
+    user = santri.user
+    if user:
+        user.delete()
+    else:
+        santri.delete()
+
+    RegistrationCode.objects.filter(santri_name__iexact=santri_name, used=False).delete()
+    invalidate_face_model_cache()
+
+    return Response({'ok': True, 'message': 'Santri berhasil dinonaktifkan dan dihapus dari database'})
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_get_user(request):
     user = request.user
     role = "pengurus" if user.is_staff else "santri"
+    santri_profile = getattr(user, "santri_profile", None)
+    full_name = santri_profile.nama if santri_profile else getattr(user, "full_name", "")
+
     return Response({
         "id": user.id,
         "username": user.username,
+        "full_name": full_name,
         "is_staff": user.is_staff,
         "is_superuser": user.is_superuser,
         "role": role
@@ -220,7 +304,7 @@ class LoginPengurusView(APIView):
             "user": {
                 "id": user.id,
                 "username": user.username,
-                "nama_lengkap": santri_profile.nama if santri_profile else None,
+                "full_name": santri_profile.nama if santri_profile else getattr(user, "full_name", ""),
                 "santri_id": santri_profile.id if santri_profile else None,
                 "sektor": santri_profile.sektor if santri_profile else None,
                 "angkatan": santri_profile.angkatan if santri_profile else None
@@ -292,6 +376,7 @@ def api_santri_registrasi_wajah(request):
         if len(encodings) == 0:
             return Response({"error": "Wajah tidak ditemukan pada semua pose"}, status=400)
 
+        # Replace old face encoding with latest registration samples.
         santri.face_encoding = encodings if len(encodings) > 1 else encodings[0]
         santri.save()
         invalidate_face_model_cache()
@@ -340,6 +425,7 @@ def api_santri_upload_foto(request):
         if hog_encoding is None:
             return Response({"error": "Wajah tidak terdeteksi, coba gunakan foto yang lebih jelas"}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Replace old face encoding with latest uploaded photo encoding.
         santri.face_encoding = hog_encoding
         santri.save()
         invalidate_face_model_cache()
@@ -397,6 +483,13 @@ def api_recognize_and_attend(request):
             
         presensi_info = cache.get(PRESENSI_KEY)
         kelas = request.data.get("kelas") or "Kamu kelas apa?"
+        claimed_santri_id_raw = request.data.get("claimed_santri_id")
+        claimed_santri_id = None
+        if claimed_santri_id_raw not in (None, "", "null"):
+            try:
+                claimed_santri_id = int(claimed_santri_id_raw)
+            except (TypeError, ValueError):
+                return Response({"ok": False, "message": "claimed_santri_id harus berupa angka"}, status=400)
 
         if not presensi_info:
             return Response({"ok": False, "message": "Presensi belum dimulai"}, status=400)
@@ -406,19 +499,40 @@ def api_recognize_and_attend(request):
         telat_start = presensi_info.get('telat_start')
 
         pil_img = decode_base64_image(data_url)
-        recognized, info, rejected, all_locations = recognize_many_from_image_pil(pil_img, min_prob=0.58, max_faces=5)
+        recognized, info, rejected, all_locations = recognize_many_from_image_pil(
+            pil_img,
+            min_prob=0.56,
+            max_faces=5,
+            claimed_pk=claimed_santri_id,
+        )
         if not recognized:
             error_map = {
                 "no_face": "Wajah tidak terdeteksi, pastikan wajah terlihat jelas",
                 "no_dataset": "Belum ada dataset wajah yang terdaftar",
                 "not_enough_classes": "Minimal dua santri perlu diregistrasi agar model SVM bisa dilatih",
                 "low_confidence": "Wajah tidak cocok (confidence terlalu rendah)",
+                "ambiguous_face": "Wajah mirip dengan santri lain. Lakukan scan satu per satu atau kirim claimed_santri_id.",
                 "not_found": "Profil santri tidak ditemukan",
                 "detector_unavailable": "Detector wajah tidak tersedia di server"
             }
             message = error_map.get(info, "Wajah tidak cocok")
             status_code = 400
-            payload = {"ok": False, "message": message}
+            retry_map = {
+                "no_face": 1200,
+                "low_confidence": 1600,
+                "ambiguous_face": 1800,
+                "not_found": 1800,
+                "detector_unavailable": 2500,
+                "no_dataset": 3000,
+                "not_enough_classes": 3000,
+            }
+            payload = {
+                "ok": False,
+                "message": message,
+                "info": info,
+                "retry_after_ms": retry_map.get(info, 1400),
+                "can_claim_identity": info == "ambiguous_face",
+            }
             if rejected:
                 first = rejected[0]
                 location = first.get("location")
@@ -469,16 +583,13 @@ def api_recognize_and_attend(request):
             location = item["location"]
             confidence = item["confidence"]
 
-            Presensi.objects.update_or_create(
+            _replace_presensi_record(
                 santri=santri,
                 tanggal=tanggal,
                 sesi=sesi,
                 kelas=kelas,
-                defaults={
-                    "status": status_presensi,
-                    "kelas": kelas,
-                    "created_by": request.user
-                }
+                status_presensi=status_presensi,
+                created_by=request.user,
             )
 
             if kelas and kelas != "Kamu kelas apa?":

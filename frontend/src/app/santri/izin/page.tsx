@@ -138,7 +138,7 @@ export default function IzinPage() {
                 </label>
                 <input
                   type="text"
-                  value={user?.nama_lengkap || user?.username || ''}
+                  value={user?.full_name || user?.username || ''}
                   disabled
                   className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-700"
                 />

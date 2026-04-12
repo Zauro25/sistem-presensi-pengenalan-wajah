@@ -267,22 +267,27 @@ def nearest_distance_by_class(samples, labels, query_enc):
 
 def compute_hybrid_confidence(svm_prob, near_dist, dist_gap):
     # Convert distance signals to [0, 1] then blend with SVM probability.
-    dist_score = np.clip((0.95 - float(near_dist)) / 0.55, 0.0, 1.0)
-    gap_score = np.clip((float(dist_gap) - 0.01) / 0.18, 0.0, 1.0)
+    dist_score = np.clip((1.05 - float(near_dist)) / 0.50, 0.0, 1.0)
+    gap_score = np.clip((float(dist_gap) - 0.005) / 0.14, 0.0, 1.0)
     prob_score = np.clip(float(svm_prob), 0.0, 1.0)
-    hybrid = (0.30 * prob_score) + (0.45 * dist_score) + (0.25 * gap_score)
+    hybrid = (0.25 * prob_score) + (0.50 * dist_score) + (0.25 * gap_score)
     return float(np.clip(hybrid, 0.0, 1.0))
 
 
 def calibrate_final_confidence(base_conf, near_dist, dist_gap):
     final_conf = float(base_conf)
-    if near_dist <= 0.55 and dist_gap >= 0.06:
-        final_conf = max(final_conf, 0.78)
+    if near_dist <= 0.50 and dist_gap >= 0.08:
+        final_conf = max(final_conf, 0.90)
+    elif near_dist <= 0.56 and dist_gap >= 0.06:
+        final_conf = max(final_conf, 0.84)
     elif near_dist <= 0.62 and dist_gap >= 0.04:
-        final_conf = max(final_conf, 0.72)
+        final_conf = max(final_conf, 0.78)
     elif near_dist <= 0.68 and dist_gap >= 0.03:
-        final_conf = max(final_conf, 0.67)
-    return float(np.clip(final_conf, 0.0, 1.0))
+        final_conf = max(final_conf, 0.72)
+
+    # Stretch upper range so valid matches do not get stuck around 60-70.
+    stretched = np.clip(final_conf, 0.0, 1.0) ** 0.82
+    return float(np.clip(stretched, 0.0, 1.0))
 
 
 def profile_confidence(predicted_pk, query_enc, profiles):
@@ -334,7 +339,23 @@ def _clip_face_box(location, h, w):
     return (top, right, bottom, left)
 
 
-def _classify_hog_features(hog_features, location, min_prob):
+def _expand_face_box(location, h, w, pad_ratio=0.18, min_pad=8):
+    top, right, bottom, left = location
+    box_h = max(1, bottom - top)
+    box_w = max(1, right - left)
+    pad_h = max(int(box_h * pad_ratio), min_pad)
+    pad_w = max(int(box_w * pad_ratio), min_pad)
+
+    expanded = (
+        max(0, top - pad_h),
+        min(w, right + pad_w),
+        min(h, bottom + pad_h),
+        max(0, left - pad_w),
+    )
+    return _clip_face_box(expanded, h, w)
+
+
+def _classify_hog_features(hog_features, location, min_prob, claimed_pk=None):
     model, scaler, samples, labels, profiles, err = get_trained_artifacts()
     if err:
         return None, err, None
@@ -344,18 +365,38 @@ def _classify_hog_features(hog_features, location, min_prob):
         return None, "low_confidence", None
 
     near_id, near_dist = ranked_distances[0]
+    by_id_dist = {int(sid): float(dist) for sid, dist in ranked_distances}
     second_dist = ranked_distances[1][1] if len(ranked_distances) > 1 else float("inf")
     dist_gap = second_dist - near_dist
+    relative_gap = dist_gap / max(near_dist, 1e-6)
 
     if near_dist > 0.8:
         return None, "low_confidence", None
 
+    # When two identities are too close, treat as ambiguous instead of forcing a match.
+    is_ambiguous_pair = np.isfinite(second_dist) and (dist_gap < 0.045 or relative_gap < 0.08)
+
+    # Allow disambiguation only when caller claims identity and that identity is still very close.
+    if is_ambiguous_pair and claimed_pk is not None:
+        claimed_dist = by_id_dist.get(int(claimed_pk))
+        if claimed_dist is not None:
+            if claimed_dist <= 0.66 and (claimed_dist - near_dist) <= 0.03:
+                near_id = int(claimed_pk)
+                near_dist = float(claimed_dist)
+                other_dists = [float(d) for sid, d in ranked_distances if int(sid) != near_id]
+                second_dist = other_dists[0] if other_dists else float("inf")
+                dist_gap = second_dist - near_dist
+                relative_gap = dist_gap / max(near_dist, 1e-6)
+                is_ambiguous_pair = False
+            else:
+                return None, "ambiguous_face", None
+
     predicted_pk, prob, margin = predict_with_svm(model, scaler, hog_features, min_prob=min_prob)
     hybrid_conf = compute_hybrid_confidence(prob, near_dist, dist_gap)
     if predicted_pk is None:
-        if near_dist <= 0.68 and dist_gap >= 0.04:
+        if (not is_ambiguous_pair) and near_dist <= 0.64 and dist_gap >= 0.05:
             predicted_pk = near_id
-            prob = max(float(hybrid_conf), 0.70)
+            prob = max(float(hybrid_conf), 0.68)
         else:
             return None, "low_confidence", float(hybrid_conf)
 
@@ -374,6 +415,12 @@ def _classify_hog_features(hog_features, location, min_prob):
     base_conf = (0.55 * max(float(prob), hybrid_conf)) + (0.45 * prof_blend)
     final_conf = calibrate_final_confidence(base_conf, near_dist, dist_gap)
 
+    # Final safety gates against similar-looking faces.
+    if is_ambiguous_pair and final_conf < 0.78:
+        return None, "ambiguous_face", float(final_conf)
+    if final_conf < 0.55:
+        return None, "low_confidence", float(final_conf)
+
     return {
         "santri": santri,
         "location": location,
@@ -386,6 +433,7 @@ def extract_hog_features(face_img, resize_dim=(128, 128)):
         face_gray = cv2.cvtColor(face_resized, cv2.COLOR_RGB2GRAY)
     else:
         face_gray = face_resized
+    face_gray = cv2.equalizeHist(face_gray)
     hog_features = hog(
         face_gray,
         orientations=9,
@@ -406,17 +454,18 @@ def encode_face_from_image(pil_image):
         return None, None
     top, right, bottom, left = face_locations[0]
     h, w = img.shape[:2]
-    top = max(0, min(top, h - 1))
-    bottom = max(0, min(bottom, h))
-    left = max(0, min(left, w - 1))
-    right = max(0, min(right, w))
-    if bottom <= top or right <= left:
+    clipped = _clip_face_box((top, right, bottom, left), h, w)
+    if not clipped:
         return None, None
+    expanded = _expand_face_box(clipped, h, w)
+    if not expanded:
+        return None, None
+    top, right, bottom, left = expanded
     face_img = img[top:bottom, left:right]
     hog_features = extract_hog_features(face_img)
     return hog_features.tolist(), (top, right, bottom, left)
 
-def recognize_from_image_pil(pil_image, min_prob=0.58):
+def recognize_from_image_pil(pil_image, min_prob=0.58, claimed_pk=None):
     try:
         img = np.array(pil_image.convert("RGB"))
         face_locations = detect_face_locations_robust(img)
@@ -428,12 +477,15 @@ def recognize_from_image_pil(pil_image, min_prob=0.58):
         clipped = _clip_face_box(face_locations[0], h, w)
         if not clipped:
             return None, "no_face", None, None
-        top, right, bottom, left = clipped
+        expanded = _expand_face_box(clipped, h, w)
+        if not expanded:
+            return None, "no_face", None, None
+        top, right, bottom, left = expanded
         face_img = img[top:bottom, left:right]
         hog_features = extract_hog_features(face_img)
-        result, info, conf = _classify_hog_features(hog_features, clipped, min_prob=min_prob)
+        result, info, conf = _classify_hog_features(hog_features, expanded, min_prob=min_prob, claimed_pk=claimed_pk)
         if not result:
-            return None, info, clipped, conf
+            return None, info, expanded, conf
         return result["santri"], "ok", result["location"], result["confidence"]
     except Exception as e:
         import traceback
@@ -441,7 +493,7 @@ def recognize_from_image_pil(pil_image, min_prob=0.58):
         return None, f"error: {str(e)}", None, None
 
 
-def recognize_many_from_image_pil(pil_image, min_prob=0.58, max_faces=5):
+def recognize_many_from_image_pil(pil_image, min_prob=0.58, max_faces=5, claimed_pk=None):
     try:
         img = np.array(pil_image.convert("RGB"))
         face_locations = detect_face_locations_robust(img)
@@ -459,16 +511,19 @@ def recognize_many_from_image_pil(pil_image, min_prob=0.58, max_faces=5):
             clipped = _clip_face_box(loc, h, w)
             if not clipped:
                 continue
-            top, right, bottom, left = clipped
+            expanded = _expand_face_box(clipped, h, w)
+            if not expanded:
+                continue
+            top, right, bottom, left = expanded
             face_img = img[top:bottom, left:right]
             hog_features = extract_hog_features(face_img)
-            result, info, conf = _classify_hog_features(hog_features, clipped, min_prob=min_prob)
+            result, info, conf = _classify_hog_features(hog_features, expanded, min_prob=min_prob, claimed_pk=claimed_pk)
             if result and result["santri"].id not in seen_ids:
                 seen_ids.add(result["santri"].id)
                 recognized.append(result)
             else:
                 rejected.append({
-                    "location": clipped,
+                    "location": expanded,
                     "info": info,
                     "confidence": conf,
                 })

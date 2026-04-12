@@ -24,7 +24,7 @@ INSTALLED_APPS = [
     "django_filters",
     "drf_spectacular",
     "corsheaders",
-    "pengurus_app",
+    "pengurus_app.apps.PengurusAppConfig",
 ]
 
 

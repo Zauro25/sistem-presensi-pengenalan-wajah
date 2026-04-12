@@ -7,7 +7,7 @@ interface User {
   id: number;
   username: string;
   email?: string;
-  nama_lengkap?: string;
+  full_name?: string;
   sektor?: string;
   angkatan?: string;
   santri_id?: number;

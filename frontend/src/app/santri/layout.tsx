@@ -88,7 +88,7 @@ export default function SantriLayout({ children }: { children: ReactNode }) {
             </div>
 
             <div className="mb-6 px-3 py-3 bg-secondary rounded-lg">
-              <p className="text-sm font-semibold text-white text-center">{user?.nama_lengkap || user?.username}</p>
+              <p className="text-sm font-semibold text-white text-center">{user?.full_name || user?.username}</p>
               {user?.sektor && <p className="text-xs text-white text-center">Sektor: {user.sektor}</p>}
             </div>
 

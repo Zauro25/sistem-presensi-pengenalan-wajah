@@ -21,15 +21,7 @@ export default function PresensiPage() {
   const nextScanAtRef = useRef(0);
   const scanRafRef = useRef<number | null>(null);
   const captureSizeRef = useRef({ w: 640, h: 480 });
-
-  useEffect(() => {
-    const today = new Date().toISOString().split('T')[0];
-    setTanggal(today);
-
-    return () => {
-      stopCamera();
-    };
-  }, []);
+  const failStreakRef = useRef(0);
 
   const startCamera = useCallback(async () => {
     try {
@@ -76,6 +68,15 @@ export default function PresensiPage() {
     nextScanAtRef.current = 0;
     setScanning(false);
   }, []);
+
+  useEffect(() => {
+    const today = new Date().toISOString().split('T')[0];
+    setTanggal(today);
+
+    return () => {
+      stopCamera();
+    };
+  }, [stopCamera]);
 
   const handleStartPresensi = async () => {
     if (!kelas || !tanggal || !sesi) {
@@ -127,6 +128,7 @@ export default function PresensiPage() {
 
     processingRef.current = true;
     setScanning(true);
+    let cooldownMs = 700;
 
     try {
       const video = videoRef.current;
@@ -183,10 +185,17 @@ export default function PresensiPage() {
         type: 'success', 
         text: `${attendees.length} wajah tercatat` 
       });
+      failStreakRef.current = 0;
+      cooldownMs = 650;
 
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
     } catch (error) {
       const detections = Array.isArray(error?.data?.detections) ? error.data.detections : [];
+      const retryHint = Number(error?.data?.retry_after_ms || 0);
+      const failStreak = Math.min(6, failStreakRef.current + 1);
+      failStreakRef.current = failStreak;
+      const adaptiveBackoff = 1000 + (failStreak * 250);
+      cooldownMs = retryHint > 0 ? retryHint : adaptiveBackoff;
 
       setScanResult({
         success: false,
@@ -212,7 +221,7 @@ export default function PresensiPage() {
     } finally {
       processingRef.current = false;
       setScanning(false);
-      nextScanAtRef.current = Date.now() + 400;
+      nextScanAtRef.current = Date.now() + cooldownMs;
     }
   }, [kelas]);
 

@@ -1,88 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { api } from '@/lib/api';
-
-const todayISO = () => new Date().toISOString().slice(0, 10);
-const daysAgoISO = (n) => {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
-};
 
 export default function SantriDashboard() {
   const { user } = useAuth();
-  const [izinList, setIzinList] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [attLoading, setAttLoading] = useState(true);
-  const [attError, setAttError] = useState('');
-  const [attendance, setAttendance] = useState({ total: 0, hadir: 0, t1: 0, t2: 0, t3: 0 });
-
-  useEffect(() => {
-    loadIzinHistory();
-  }, []);
-
-  useEffect(() => {
-    loadAttendanceStats();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
-
-  const loadIzinHistory = async () => {
-    try {
-      const response = await api.listIzinSantri();
-      setIzinList(response.data || []);
-    } catch (error) {
-      console.error('Error loading izin:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadAttendanceStats = async () => {
-    if (!user) return;
-    setAttLoading(true);
-    setAttError('');
-    try {
-      const end = todayISO();
-      const start = daysAgoISO(14);
-      const rekap = await api.getRekap(start, end, null);
-      const nama = user.nama_lengkap || user.username;
-      const rows = [...(rekap?.putra || []), ...(rekap?.putri || [])];
-      const me = rows.find((r) => r.nama === nama);
-      if (!me) {
-        setAttendance({ total: 0, hadir: 0, t1: 0, t2: 0, t3: 0 });
-        return;
-      }
-      const values = Object.values(me).filter((v) => typeof v === 'string');
-      const statuses = values.filter((v) => ['Hadir', 'T1', 'T2', 'T3'].includes(v));
-      const hadir = statuses.filter((v) => v === 'Hadir').length;
-      const t1 = statuses.filter((v) => v === 'T1').length;
-      const t2 = statuses.filter((v) => v === 'T2').length;
-      const t3 = statuses.filter((v) => v === 'T3').length;
-      setAttendance({ total: statuses.length, hadir, t1, t2, t3 });
-    } catch (error) {
-      console.error('Error loading attendance stats:', error);
-      setAttError('Gagal memuat statistik presensi');
-    } finally {
-      setAttLoading(false);
-    }
-  };
-
-  const getStatusBadge = (status) => {
-    const styles = {
-      'Menunggu': 'bg-yellow-100 text-yellow-800',
-      'Disetujui': 'bg-green-100 text-green-800',
-      'Ditolak': 'bg-red-100 text-red-800',
-    };
-    return styles[status] || 'bg-gray-100 text-gray-800';
-  };
 
   return (
     <div>
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-white text-center">Dashboard Santri</h1>
-        <p className="text-white font-semibold mt-2 text-center">Selamat datang, {user?.nama_lengkap || user?.username}</p>
+        <p className="text-white font-semibold mt-2 text-center">Selamat datang, {user?.full_name || user?.username}</p>
       </div>
 
       <div className="flex flex-col gap-6 mb-8">
@@ -95,7 +23,7 @@ export default function SantriDashboard() {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Nama</p>
-              <p className="text-lg font-semibold text-gray-900">{user?.nama_lengkap || 'N/A'}</p>
+              <p className="text-lg font-semibold text-gray-900">{user?.full_name || 'N/A'}</p>
             </div>
           </div>
         </div>
@@ -128,75 +56,6 @@ export default function SantriDashboard() {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center">
-            <div className="p-3 bg-yellow-100 rounded-lg">
-              <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Statistik Presensi (14 hari)</p>
-              {attLoading ? (
-                <p className="text-lg font-semibold text-gray-900">...</p>
-              ) : attError ? (
-                <p className="text-sm text-red-600">{attError}</p>
-              ) : (
-                <p className="text-sm text-gray-800">
-                  Total {attendance.total} | Hadir {attendance.hadir} | T1 {attendance.t1} | T2 {attendance.t2} | T3 {attendance.t3}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">Riwayat Izin Anda</h2>
-        </div>
-        <div className="p-6">
-          {loading ? (
-            <div className="text-center py-8">
-              <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
-            </div>
-          ) : izinList.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              Belum ada riwayat izin
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tanggal</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sesi</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kelas</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Alasan</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {izinList.slice(0, 5).map((izin) => (
-                    <tr key={izin.id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(izin.tanggal).toLocaleDateString('id-ID')}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{izin.sesi}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{izin.kelas || '-'}</td>
-                      <td className="px-6 py-4 text-sm text-gray-900">{izin.alasan}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadge(izin.status)}`}>
-                          {izin.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

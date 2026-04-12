@@ -68,9 +68,10 @@ export default function PengurusLayout({ children }: { children: ReactNode }) {
   const menuItems = [
     { name: 'Dashboard', path: '/pengurus/dashboard'},
     { name: 'Presensi', path: '/pengurus/presensi'},
+    { name: 'Rekap Presensi', path: '/pengurus/rekap'},
     { name: 'Verifikasi Izin', path: '/pengurus/verifikasi-izin'},
     { name: 'Verifikasi Data Santri', path: '/pengurus/verify-santri'},
-    { name: 'Rekap Presensi', path: '/pengurus/rekap'},
+    { name: 'Nonaktifkan Santri', path: '/pengurus/nonaktifkan-santri'},
   ];
 
   const handleLogout = async () => {

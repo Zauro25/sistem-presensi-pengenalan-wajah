@@ -154,6 +154,17 @@ class ApiClient {
     return this.request('/santri/', { method: 'GET' });
   }
 
+  async searchSantriForDeactivation(nama: string, asalDaerah: string): Promise<any> {
+    const params = new URLSearchParams({ nama, asal_daerah: asalDaerah });
+    return this.request(`/santri/search/?${params.toString()}`, { method: 'GET' });
+  }
+
+  async deactivateSantri(santriId: number | string): Promise<any> {
+    return this.request(`/santri/${santriId}/deactivate/`, {
+      method: 'DELETE',
+    });
+  }
+
   async uploadSantriFoto(santriId: number | string, fotoFile: File): Promise<any> {
     const formData = new FormData();
     formData.append('santri_id', String(santriId));
@@ -219,13 +230,19 @@ class ApiClient {
     });
   }
 
-  async recognizeAndAttend(imageBase64: string, kelas: string): Promise<any> {
+  async recognizeAndAttend(imageBase64: string, kelas: string, claimedSantriId?: number | string): Promise<any> {
+    const payload: Record<string, any> = {
+      image: imageBase64,
+      kelas,
+    };
+
+    if (claimedSantriId !== undefined && claimedSantriId !== null && String(claimedSantriId).trim() !== '') {
+      payload.claimed_santri_id = String(claimedSantriId);
+    }
+
     return this.request('/recognize/', {
       method: 'POST',
-      body: JSON.stringify({
-        image: imageBase64,
-        kelas,
-      }),
+      body: JSON.stringify(payload),
     });
   }
 

@@ -26,7 +26,9 @@ class RegisterSantriAccountSerializer(serializers.ModelSerializer):
         password = validated_data['password']
         
 
-        user = User.objects.create_user(username=username, password=password, first_name=nama, is_staff=False)
+        user = User.objects.create_user(username=username, password=password, is_staff=False)
+        user.full_name = nama
+        user.save(update_fields=['first_name'])
 
 
         santri = Santri.objects.create(
@@ -42,14 +44,20 @@ class RegisterSantriAccountSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True)
+    full_name = serializers.CharField(required=False, allow_blank=True)
+
     class Meta:
         model = User
-        fields = ['id','username','password','is_staff']
+        fields = ['id', 'username', 'password', 'is_staff', 'full_name']
 
     def create(self, validated_data):
+        full_name = validated_data.pop('full_name', '')
         user = User(username=validated_data['username'], is_staff=True)
         user.set_password(validated_data['password'])
         user.save()
+        if full_name:
+            user.full_name = full_name
+            user.save(update_fields=['first_name'])
         return user
 
 class SantriSerializer(serializers.ModelSerializer):
@@ -70,4 +78,4 @@ class SuratIzinSerializer(serializers.ModelSerializer):
     santri_id = serializers.PrimaryKeyRelatedField(queryset=Santri.objects.all(), source='santri', write_only=True)
     class Meta:
         model = SuratIzin
-        fields = ['id','santri','santri_id','kelas','tanggal', 'alasan','status','note']
+        fields = ['id','santri','santri_id','kelas','tanggal','sesi','alasan','status','note']

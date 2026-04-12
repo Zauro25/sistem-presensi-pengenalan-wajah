@@ -7,6 +7,8 @@ urlpatterns = [
     path("login-token/", views.LoginPengurusView.as_view(), name="login-token"),
     path("users/token/", views.LoginPengurusView.as_view(), name="users-token"),
     path('santri/', views.api_list_santri),
+    path('santri/search/', views.api_search_santri_for_deactivation, name='santri-search'),
+    path('santri/<int:santri_id>/deactivate/', views.api_deactivate_santri, name='santri-deactivate'),
     path('santri/upload-foto/', views.api_santri_upload_foto, name="santri-upload-foto"),
     path("santri/izin/", views.api_permohonan_izin, name="api_permohonan_izin"),
     path("santri/izin/list/", views.list_izin_santri, name="list_izin_santri"),

@@ -144,7 +144,7 @@ export default function FaceRegistrationPage() {
       setMessage(res?.message || 'Registrasi berhasil.');
       setLastScan({
         success: true,
-        nama: res?.nama || user?.nama_lengkap || user?.username || 'Santri',
+        nama: res?.nama || user?.full_name || user?.username || 'Santri',
         captured: res?.captured,
         total: res?.total,
         time: new Date().toLocaleTimeString('id-ID'),

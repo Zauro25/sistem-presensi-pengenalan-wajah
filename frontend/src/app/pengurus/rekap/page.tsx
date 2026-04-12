@@ -13,7 +13,7 @@ export default function RekapPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [exporting, setExporting] = useState(false);
-  const [activeTab, setActiveTab] = useState('summary');
+  const [activeTab, setActiveTab] = useState('putra');
 
   const handleLoadRekap = async (e) => {
     e.preventDefault();
@@ -30,7 +30,7 @@ export default function RekapPage() {
       const response = await api.getRekap(startDate, endDate, kelas);
       setRekapData(response);
       setMessage({ type: 'success', text: 'Data rekap berhasil dimuat' });
-      setActiveTab('summary');
+      setActiveTab('putra');
     } catch (error) {
       setMessage({ type: 'error', text: error.message || 'Gagal memuat rekap' });
       setRekapData(null);
@@ -157,165 +157,10 @@ export default function RekapPage() {
 
       {rekapData && (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="summary">Ringkasan</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="putra">Rekap Putra</TabsTrigger>
             <TabsTrigger value="putri">Rekap Putri</TabsTrigger>
           </TabsList>
-
-          <TabsContent value="summary" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-white rounded-lg shadow p-6">
-                <div className="flex items-center">
-                  <div className="p-3 bg-primary-100 rounded-lg">
-                    <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Santri Putra</p>
-                    <p className="text-2xl font-bold text-gray-900">{rekapData.putra?.length || 0}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-lg shadow p-6">
-                <div className="flex items-center">
-                  <div className="p-3 bg-pink-100 rounded-lg">
-                    <svg className="w-6 h-6 text-pink-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Santri Putri</p>
-                    <p className="text-2xl font-bold text-gray-900">{rekapData.putri?.length || 0}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-lg shadow p-6">
-                <div className="flex items-center">
-                  <div className="p-3 bg-green-100 rounded-lg">
-                    <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Total Sesi</p>
-                    <p className="text-2xl font-bold text-gray-900">{rekapData.headers?.length || 0}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow p-4">
-              <h3 className="text-sm font-semibold text-gray-900 mb-3">Keterangan:</h3>
-              <div className="flex flex-wrap gap-4 text-sm">
-                <div className="flex items-center">
-                  <span className={`px-2 py-1 rounded ${getStatusColor('Hadir')} mr-2`}>Hadir</span>
-                  <span className="text-gray-600">Hadir tepat waktu</span>
-                </div>
-                <div className="flex items-center">
-                  <span className={`px-2 py-1 rounded ${getStatusColor('T1')} mr-2`}>T1</span>
-                  <span className="text-gray-600">Telat ≤5 menit</span>
-                </div>
-                <div className="flex items-center">
-                  <span className={`px-2 py-1 rounded ${getStatusColor('T2')} mr-2`}>T2</span>
-                  <span className="text-gray-600">Telat 5-15 menit</span>
-                </div>
-                <div className="flex items-center">
-                  <span className={`px-2 py-1 rounded ${getStatusColor('T3')} mr-2`}>T3</span>
-                  <span className="text-gray-600">Telat &gt;15 menit</span>
-                </div>
-                <div className="flex items-center">
-                  <span className={`px-2 py-1 rounded ${getStatusColor('Izin')} mr-2`}>Izin</span>
-                  <span className="text-gray-600">Izin disetujui</span>
-                </div>
-                <div className="flex items-center">
-                  <span className={`px-2 py-1 rounded ${getStatusColor('-')} mr-2`}>-</span>
-                  <span className="text-gray-600">Tidak hadir</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Tabel Rekap Gabungan */}
-            {(rekapData.putra?.length > 0 || rekapData.putri?.length > 0) && (
-              <div className="bg-white rounded-lg shadow">
-                <div className="px-6 py-4 border-b border-gray-200">
-                  <h2 className="text-xl font-semibold text-gray-900">Rekap Semua Santri</h2>
-                </div>
-                <div className="p-6 overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50">
-                          Nama
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Jenis Kelamin
-                        </th>
-                        {rekapData.headers && rekapData.headers.map((header, idx) => (
-                          <th key={idx} className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                            {header.col_key}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {rekapData.putra && rekapData.putra.map((row, idx) => (
-                        <tr key={`putra-${idx}`}>
-                          <td className="px-4 py-3 text-sm font-medium text-gray-900 sticky left-0 bg-white">
-                            {row.Nama}
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm">
-                            <span className="px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                              Putra
-                            </span>
-                          </td>
-                          {rekapData.headers.map((header, hidx) => {
-                            const value = row[header.col_key] || '';
-                            return (
-                              <td key={hidx} className="px-4 py-3 text-center text-sm whitespace-nowrap">
-                                {value && value !== '' && (
-                                  <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(value)}`}>
-                                    {value}
-                                  </span>
-                                )}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                      {rekapData.putri && rekapData.putri.map((row, idx) => (
-                        <tr key={`putri-${idx}`}>
-                          <td className="px-4 py-3 text-sm font-medium text-gray-900 sticky left-0 bg-white">
-                            {row.Nama}
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm">
-                            <span className="px-2 py-1 rounded text-xs font-medium bg-pink-100 text-pink-800">
-                              Putri
-                            </span>
-                          </td>
-                          {rekapData.headers.map((header, hidx) => {
-                            const value = row[header.col_key] || '';
-                            return (
-                              <td key={hidx} className="px-4 py-3 text-center text-sm whitespace-nowrap">
-                                {value && value !== '' && (
-                                  <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(value)}`}>
-                                    {value}
-                                  </span>
-                                )}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </TabsContent>
 
           <TabsContent value="putra">
             {rekapData.putra && rekapData.putra.length > 0 ? (
