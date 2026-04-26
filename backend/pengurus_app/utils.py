@@ -1,16 +1,24 @@
 from .models import Santri, Presensi, SuratIzin
 from datetime import datetime
 
+
+def _session_sort_key(session_name):
+    order = {"Subuh": 0, "Sore": 1, "Malam": 2}
+    return order.get(session_name, 99)
+
+
 def get_rekap_data(start, end, kelas=None):
     start_date = datetime.strptime(start, "%Y-%m-%d").date()
     end_date = datetime.strptime(end, "%Y-%m-%d").date()
 
     presensi = Presensi.objects.filter(tanggal__range=(start_date, end_date)).select_related("santri")
     izin = SuratIzin.objects.filter(tanggal__range=(start_date, end_date)).select_related("santri")
+    izin_disetujui = izin.filter(status="Disetujui")
 
     if kelas and kelas not in ["All", "Semua Kelas"]:
         presensi = presensi.filter(kelas=kelas)
         izin = izin.filter(kelas=kelas)
+        izin_disetujui = izin_disetujui.filter(kelas=kelas)
 
     headers = []
     all_tanggal = sorted(list(set(presensi.values_list("tanggal", flat=True)) | set(izin.values_list("tanggal", flat=True))))
@@ -19,11 +27,12 @@ def get_rekap_data(start, end, kelas=None):
     
     for t in all_tanggal:
         sesi_presensi = set(presensi.filter(tanggal=t).values_list("sesi", flat=True))
-        sesi_izin = set(izin.filter(tanggal=t).values_list("sesi", flat=True))
-        actual_sessions = sorted(list(sesi_presensi | sesi_izin), key=lambda x: ["Subuh", "Sore", "Malam"].index(x))
+        sesi_izin = set(izin_disetujui.filter(tanggal=t).values_list("sesi", flat=True))
+        actual_sessions = sorted(list(sesi_presensi | sesi_izin), key=_session_sort_key)
         
         for s in actual_sessions:
             classes_on_date = set(presensi.filter(tanggal=t, sesi=s).values_list("kelas", flat=True))
+            classes_on_date.update(izin_disetujui.filter(tanggal=t, sesi=s).values_list("kelas", flat=True))
             for cls in classes_on_date:
                 if cls:
                     date_class_sessions[(t, cls, s)] = True
@@ -34,13 +43,20 @@ def get_rekap_data(start, end, kelas=None):
     putra, putri = [], []
 
     if kelas and kelas not in ["All", "Semua Kelas"]:
-        santri_ids_presensi = set(presensi.values_list("santri_id", flat=True))
-        santri_ids_izin = set(izin.values_list("santri_id", flat=True))
-        santri_ids = santri_ids_presensi | santri_ids_izin
-        
-        santri_list = Santri.objects.filter(id__in=santri_ids)
+        santri_ids_historic_presensi = set(
+            Presensi.objects.filter(kelas=kelas).values_list("santri_id", flat=True)
+        )
+        santri_ids_historic_izin = set(
+            SuratIzin.objects.filter(kelas=kelas).values_list("santri_id", flat=True)
+        )
+        santri_ids_kelas_list = set(
+            Santri.objects.filter(kelas_list__contains=[kelas]).values_list("id", flat=True)
+        )
+
+        santri_ids = santri_ids_historic_presensi | santri_ids_historic_izin | santri_ids_kelas_list
+        santri_list = Santri.objects.filter(id__in=santri_ids).order_by("nama", "santri_id")
     else:
-        santri_list = Santri.objects.all()
+        santri_list = Santri.objects.all().order_by("nama", "santri_id")
 
     for s in santri_list:
         row = {"Nama": s.nama}
@@ -54,7 +70,7 @@ def get_rekap_data(start, end, kelas=None):
                 row[h["col_key"]] = pr.status
                 continue
 
-            iz = izin.filter(santri=s, tanggal=tanggal, sesi=sesi, status="Disetujui").first()
+            iz = izin_disetujui.filter(santri=s, tanggal=tanggal, sesi=sesi).first()
             if iz:
                 row[h["col_key"]] = "Izin"
                 continue

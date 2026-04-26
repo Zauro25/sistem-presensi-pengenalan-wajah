@@ -76,16 +76,6 @@ export default function RekapPage() {
         <h1 className="text-3xl font-bold text-white text-center">Rekap Presensi</h1>
       </div>
 
-      {message.text && (
-        <div className={`mb-6 px-4 py-3 rounded-lg ${
-          message.type === 'success' 
-            ? 'bg-green-50 border border-green-200 text-green-700'
-            : 'bg-red-50 border border-red-200 text-red-700'
-        }`}>
-          {message.text}
-        </div>
-      )}
-
       <div className="bg-white rounded-lg shadow p-6 mb-8">
         <h2 className="text-xl font-semibold text-gray-900 mb-6">Filter Rekap</h2>
         

@@ -199,7 +199,8 @@ export default function PresensiPage() {
     const cooldownMs = retryHint > 0 ? retryHint : adaptiveBackoff;
 
     const canClaimIdentity = error?.data?.can_claim_identity === true;
-    manualClaimNeededRef.current = canClaimIdentity;
+    // Keep auto-scan running even when backend suggests manual claim.
+    manualClaimNeededRef.current = false;
 
     setScanResult({
       success: false,
@@ -298,11 +299,6 @@ export default function PresensiPage() {
       }
 
       if (!streamRef.current) {
-        scanRafRef.current = requestAnimationFrame(loop);
-        return;
-      }
-
-      if (manualClaimNeededRef.current) {
         scanRafRef.current = requestAnimationFrame(loop);
         return;
       }
@@ -517,7 +513,7 @@ export default function PresensiPage() {
 
                 <div className="rounded-md border border-black  p-4 space-y-2">
                   <p className="text-sm font-medium text-black">Presensi manual (nama lengkap)</p>
-                  <p className="text-xs text-blue-950">Gunakan ini saat wajah terdeteksi mirip atau scanner gagal mengenali.</p>
+                  <p className="text-xs text-blue-950">Gunakan ini saat wajah terdeteksi mirip atau sistem pengenal error.</p>
                   <input
                     type="text"
                     value={manualFullName}

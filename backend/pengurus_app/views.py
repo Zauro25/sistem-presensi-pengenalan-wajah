@@ -102,7 +102,11 @@ def list_permohonan_izin(request):
     user = request.user
     
     if user.is_staff:
-        izin = SuratIzin.objects.filter(status="Menunggu").select_related('santri').order_by('-tanggal')
+        include_all = (request.query_params.get('include_all') or '').strip().lower() in ['1', 'true', 'yes']
+        if include_all:
+            izin = SuratIzin.objects.all().select_related('santri').order_by('-tanggal')
+        else:
+            izin = SuratIzin.objects.filter(status="Menunggu").select_related('santri').order_by('-tanggal')
     else:
         santri = Santri.objects.get(user=user)
         izin = SuratIzin.objects.filter(santri=santri).select_related('santri').order_by('-tanggal')

@@ -7,8 +7,53 @@ interface ApiError extends Error {
   data?: any;
 }
 
+function normalizeBaseUrl(url: string): string {
+  return url.replace(/\/+$/, '');
+}
+
+function isIpv4Host(hostname: string): boolean {
+  return /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname);
+}
+
+function isLocalNetworkHost(hostname: string): boolean {
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
+    return true;
+  }
+
+  if (hostname.endsWith('.local')) {
+    return true;
+  }
+
+  if (!isIpv4Host(hostname)) {
+    return false;
+  }
+
+  return (
+    hostname.startsWith('10.') ||
+    hostname.startsWith('192.168.') ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname)
+  );
+}
+
 function getApiBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+  const envBaseUrl = (process.env.NEXT_PUBLIC_API_URL || '').trim();
+  if (envBaseUrl) {
+    return normalizeBaseUrl(envBaseUrl);
+  }
+
+  if (typeof window !== 'undefined') {
+    const { hostname, origin } = window.location;
+
+    // Local/dev hosts usually run backend on port 8000 on the same machine.
+    if (isLocalNetworkHost(hostname)) {
+      return normalizeBaseUrl(`http://${hostname}:8000/api`);
+    }
+
+    // For hosted domains, prefer same-origin /api (works with reverse proxy and avoids mixed-content issues).
+    return normalizeBaseUrl(`${origin}/api`);
+  }
+
+  return 'http://localhost:8000/api';
 }
 
 class ApiClient {
@@ -76,6 +121,15 @@ class ApiClient {
           window.location.href = '/login';
         }
       }
+
+      if (!apiError.status && error instanceof TypeError) {
+        const networkError = new Error(
+          `Tidak bisa terhubung ke server API (${this.baseURL}). Periksa NEXT_PUBLIC_API_URL atau pastikan backend aktif.`
+        ) as ApiError;
+        networkError.data = { endpoint, baseURL: this.baseURL };
+        throw networkError;
+      }
+
       throw error;
     }
   }
@@ -193,8 +247,9 @@ class ApiClient {
     return this.request('/santri/izin/list/', { method: 'GET' });
   }
 
-  async listPermohonanIzin(): Promise<any> {
-    return this.request('/izin/list/', { method: 'GET' });
+  async listPermohonanIzin(includeAll: boolean = false): Promise<any> {
+    const suffix = includeAll ? '?include_all=1' : '';
+    return this.request(`/izin/list/${suffix}`, { method: 'GET' });
   }
 
   async validasiIzin(izinId: number | string, status: string, note: string = ''): Promise<any> {
