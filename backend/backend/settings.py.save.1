@@ -28,11 +28,7 @@ INSTALLED_APPS = [
     "pengurus_app.apps.PengurusAppConfig",
 ]
 
-CSRF_TRUSTED_ORIGINS = [
-    "https://8d68-182-253-128-4.ngrok-free.app",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
+CSRF_TRUSTED_
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
@@ -140,6 +136,4 @@ CORS_ALLOW_HEADERS = [
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "https://8d68-182-253-128-4.ngrok-free.app",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
 ]

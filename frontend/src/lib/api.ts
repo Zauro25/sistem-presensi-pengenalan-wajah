@@ -8,17 +8,7 @@ interface ApiError extends Error {
 }
 
 function getApiBaseUrl(): string {
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
-  }
-
-  if (typeof window !== 'undefined') {
-    const protocol = window.location.protocol;
-    const hostname = window.location.hostname;
-    return `${protocol}//${hostname}:8000/api`;
-  }
-
-  return 'http://localhost:8000/api';
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 }
 
 class ApiClient {
@@ -53,6 +43,7 @@ class ApiClient {
     const token = this.getToken();
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
       ...(options.headers as Record<string, string>),
     };
 
@@ -91,7 +82,9 @@ class ApiClient {
 
   async uploadFile(endpoint: string, formData: FormData): Promise<any> {
     const token = this.getToken();
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = {
+        'ngrok-skip-browser-warning': 'true',
+};
 
     if (token) {
       headers['Authorization'] = `Token ${token}`;

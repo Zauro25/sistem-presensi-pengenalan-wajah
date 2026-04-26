@@ -480,12 +480,40 @@ def api_recognize_and_attend(request):
         presensi_info = cache.get(PRESENSI_KEY)
         kelas = request.data.get("kelas") or "Kamu kelas apa?"
         claimed_santri_id_raw = request.data.get("claimed_santri_id")
+        claimed_full_name_raw = request.data.get("claimed_full_name")
         claimed_santri_id = None
+
         if claimed_santri_id_raw not in (None, "", "null"):
             try:
                 claimed_santri_id = int(claimed_santri_id_raw)
             except (TypeError, ValueError):
                 return Response({"ok": False, "message": "claimed_santri_id harus berupa angka"}, status=400)
+
+        if claimed_santri_id is None and claimed_full_name_raw not in (None, ""):
+            claimed_full_name = str(claimed_full_name_raw).strip()
+            if not claimed_full_name:
+                return Response({"ok": False, "message": "Nama lengkap tidak boleh kosong", "info": "invalid_claimed_name"}, status=400)
+
+            matching_santri = Santri.objects.filter(nama__iexact=claimed_full_name).order_by('id')
+            match_count = matching_santri.count()
+
+            if match_count == 0:
+                return Response({
+                    "ok": False,
+                    "message": "Nama lengkap tidak ditemukan. Cek lagi penulisan nama.",
+                    "info": "invalid_claimed_name",
+                    "can_claim_identity": True,
+                }, status=400)
+
+            if match_count > 1:
+                return Response({
+                    "ok": False,
+                    "message": "Nama lengkap tidak unik. Gunakan nama yang lebih spesifik.",
+                    "info": "duplicate_claimed_name",
+                    "can_claim_identity": True,
+                }, status=400)
+
+            claimed_santri_id = matching_santri.first().id
 
         if not presensi_info:
             return Response({"ok": False, "message": "Presensi belum dimulai"}, status=400)
@@ -507,9 +535,11 @@ def api_recognize_and_attend(request):
                 "no_dataset": "Belum ada dataset wajah yang terdaftar",
                 "not_enough_classes": "Minimal dua santri perlu diregistrasi agar model SVM bisa dilatih",
                 "low_confidence": "Wajah tidak cocok (confidence terlalu rendah)",
-                "ambiguous_face": "Wajah mirip dengan santri lain. Lakukan scan satu per satu atau kirim claimed_santri_id.",
+                "ambiguous_face": "Wajah mirip dengan santri lain. Lakukan scan satu per satu atau isi di form manual.",
                 "not_found": "Profil santri tidak ditemukan",
-                "detector_unavailable": "Detector wajah tidak tersedia di server"
+                "detector_unavailable": "Detector wajah tidak tersedia di server",
+                "invalid_claimed_name": "Nama lengkap tidak ditemukan",
+                "duplicate_claimed_name": "Nama lengkap tidak unik, mohon isi lebih spesifik",
             }
             message = error_map.get(info, "Wajah tidak cocok")
             status_code = 400
@@ -521,13 +551,15 @@ def api_recognize_and_attend(request):
                 "detector_unavailable": 2500,
                 "no_dataset": 3000,
                 "not_enough_classes": 3000,
+                "invalid_claimed_name": 1800,
+                "duplicate_claimed_name": 1800,
             }
             payload = {
                 "ok": False,
                 "message": message,
                 "info": info,
                 "retry_after_ms": retry_map.get(info, 1400),
-                "can_claim_identity": info == "ambiguous_face",
+                "can_claim_identity": info in ["ambiguous_face", "invalid_claimed_name", "duplicate_claimed_name"],
             }
             if rejected:
                 first = rejected[0]
