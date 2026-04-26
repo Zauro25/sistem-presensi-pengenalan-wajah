@@ -23,7 +23,6 @@ from django.conf import settings
 
 
 def _replace_presensi_record(santri, tanggal, sesi, kelas, status_presensi, created_by):
-    """Keep only one latest attendance row for the same santri+kelas+tanggal+sesi slot."""
     qs = Presensi.objects.filter(
         santri=santri,
         tanggal=tanggal,
@@ -50,8 +49,6 @@ def _replace_presensi_record(santri, tanggal, sesi, kelas, status_presensi, crea
         created_by=created_by,
         waktu_scan=timezone.now(),
     )
-
-
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -218,7 +215,6 @@ class RegisterPengurusView(generics.CreateAPIView):
     serializer_class = UserSerializer
     permission_classes = [AllowAny]
 
-
 class RegisterSantriView(generics.CreateAPIView):
     queryset = User.objects.all()
     serializer_class = RegisterSantriAccountSerializer
@@ -279,7 +275,7 @@ class RegisterSantriView(generics.CreateAPIView):
             "message": "Registrasi berhasil!"
         })
 
-class LoginPengurusView(APIView):
+class LoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):

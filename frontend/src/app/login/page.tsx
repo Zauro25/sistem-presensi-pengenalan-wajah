@@ -40,7 +40,7 @@ export default function LoginPage() {
       if (role === 'pengurus') {
         router.push('/pengurus/dashboard');
       } else {
-        router.push('/santri/dashboard');
+        router.push('/santri/overview');
       }
     }
   }, [user, role, router]);
@@ -55,7 +55,7 @@ export default function LoginPage() {
       if (response.role === 'pengurus') {
         router.push('/pengurus/dashboard');
       } else {
-        router.push('/santri/dashboard');
+        router.push('/santri/overview');
       }
     } catch (err) {
       setError(err.message || 'Login gagal. Periksa username dan password Anda.');

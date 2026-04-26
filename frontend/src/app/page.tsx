@@ -16,7 +16,7 @@ export default function HomePage() {
         if (role === 'pengurus') {
           router.push('/pengurus/dashboard');
         } else {
-          router.push('/santri/dashboard');
+          router.push('/santri/overview');
         }
       }
     }

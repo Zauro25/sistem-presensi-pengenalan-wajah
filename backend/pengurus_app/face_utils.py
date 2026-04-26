@@ -531,7 +531,6 @@ def recognize_many_from_image_pil(pil_image, min_prob=0.58, max_faces=5, claimed
         if recognized:
             return recognized, "ok", rejected, face_locations
 
-        # Propagate higher-level errors when available.
         first_info = rejected[0]["info"] if rejected else "low_confidence"
         return None, first_info, rejected, face_locations
     except Exception as e:

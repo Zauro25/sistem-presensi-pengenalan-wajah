@@ -11,6 +11,7 @@ Monorepo containing a Django REST API backend and a Next.js frontend for face-re
 
 ## Requirements
 
+
 - Python 3.11+
 - Node.js 18+
 - Docker 24+ and Docker Compose

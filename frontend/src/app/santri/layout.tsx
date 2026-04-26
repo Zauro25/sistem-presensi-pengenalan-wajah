@@ -35,7 +35,7 @@ export default function SantriLayout({ children }: { children: ReactNode }) {
   };
 
   const menuItems = [
-    { name: 'Dashboard', path: '/santri/dashboard'},
+    { name: 'Overview', path: '/santri/overview'},
     { name: 'Registrasi Wajah', path: '/santri/face-registration'},
     { name: 'Pengajuan Izin', path: '/santri/izin'},
   ];
