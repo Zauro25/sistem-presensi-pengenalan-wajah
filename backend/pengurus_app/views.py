@@ -16,8 +16,10 @@ from io import BytesIO
 from django.http import HttpResponse
 from PIL import Image
 from django.db import IntegrityError
-from openpyxl.styles import Alignment, Font, PatternFill
-from .utils import get_rekap_data
+from openpyxl.chart import PieChart, Reference
+from openpyxl.chart.label import DataLabelList
+from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
+from .utils import get_rekap_data, build_rekap_statistics
 import os
 from django.conf import settings
 
@@ -676,6 +678,7 @@ def api_export_xlsx(request):
         return Response({'ok': False, 'message': 'start & end required'}, status=400)
 
     data = get_rekap_data(start, end, kelas)
+    statistics = build_rekap_statistics(data)
     headers = data['headers']
     putra = data['putra']
     putri = data['putri']
@@ -691,6 +694,8 @@ def api_export_xlsx(request):
         df_putri = pd.DataFrame(putri)[cols]
     else:
         df_putri = pd.DataFrame(columns=cols)
+
+    total_summary = next(item for item in statistics["summary"] if item["Sheet"] == "Total")
 
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -723,6 +728,131 @@ def api_export_xlsx(request):
             for column_cells in ws.columns:
                 length = max(len(str(cell.value)) if cell.value else 0 for cell in column_cells)
                 ws.column_dimensions[column_cells[0].column_letter].width = length + 2
+
+        ws_stats = writer.book.create_sheet("Statistik")
+        writer.sheets["Statistik"] = ws_stats
+        ws_stats.sheet_view.showGridLines = False
+        alignment = Alignment(horizontal="center", vertical="center")
+        wrapped_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        font_bold = Font(bold=True)
+        title_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+        card_fill = PatternFill(start_color="E8F1FB", end_color="E8F1FB", fill_type="solid")
+        accent_fill = PatternFill(start_color="DDEBF7", end_color="DDEBF7", fill_type="solid")
+        thin_gray = Side(style="thin", color="D9E2F3")
+        card_border = Border(left=thin_gray, right=thin_gray, top=thin_gray, bottom=thin_gray)
+
+        ws_stats.merge_cells("A1:H1")
+        ws_stats["A1"] = "Statistik Rekapitulasi Presensi"
+        ws_stats["A1"].font = Font(bold=True, size=16, color="FFFFFF")
+        ws_stats["A1"].alignment = wrapped_center
+        ws_stats["A1"].fill = title_fill
+
+        ws_stats.merge_cells("A2:H2")
+        ws_stats["A2"] = f"Periode: {statistics['meta']['Tanggal Mulai']} s.d. {statistics['meta']['Tanggal Akhir']} | Sesi: {statistics['meta']['Daftar Sesi']}"
+        ws_stats["A2"].font = Font(italic=True, color="4F81BD")
+        ws_stats["A2"].alignment = wrapped_center
+
+        metric_cards = [
+            ("A4:B5", "Total Santri", total_summary["Santri"], card_fill),
+            ("D4:E5", "Persentase Kehadiran", f"{total_summary['Persentase Hadir']}%", accent_fill),
+            ("F4:G5", "Persentase Keterlambatan", f"{total_summary['T1'] + total_summary['T2'] + total_summary['T3']}" , card_fill),
+        ]
+
+        for cell_range, label, value, fill in metric_cards:
+            ws_stats.merge_cells(cell_range)
+            top_left = ws_stats[cell_range.split(':')[0]]
+            top_left.value = f"{label}\n{value}"
+            top_left.font = Font(bold=True, size=14, color="1F1F1F")
+            top_left.alignment = wrapped_center
+            top_left.fill = fill
+            for row in ws_stats[cell_range]:
+                for cell in row:
+                    cell.border = card_border
+                    cell.fill = fill
+                    cell.alignment = wrapped_center
+
+        ws_stats["A7"] = "Distribusi Status"
+        ws_stats["A7"].font = font_bold
+        ws_stats["A7"].fill = title_fill
+        ws_stats["A7"].alignment = wrapped_center
+
+        status_labels = ["Hadir", "Izin", "T1", "T2", "T3", "-"]
+        status_values = [
+            total_summary["Hadir"],
+            total_summary["Izin"],
+            total_summary["T1"],
+            total_summary["T2"],
+            total_summary["T3"],
+            total_summary["-"]
+        ]
+
+        ws_stats["J3"] = "Status"
+        ws_stats["K3"] = "Jumlah"
+        for cell in ws_stats["J3:K3"][0]:
+            cell.font = font_bold
+            cell.fill = title_fill
+            cell.alignment = wrapped_center
+
+        for idx, (label, value) in enumerate(zip(status_labels, status_values), start=4):
+            ws_stats[f"J{idx}"] = label
+            ws_stats[f"K{idx}"] = value
+
+        ws_stats.merge_cells("A9:H9")
+        ws_stats["A9"] = "Distribusi Status Presensi"
+        ws_stats["A9"].font = font_bold
+        ws_stats["A9"].fill = title_fill
+        ws_stats["A9"].alignment = wrapped_center
+
+        pie = PieChart()
+        pie.title = "Status Presensi"
+        pie.height = 12
+        pie.width = 18
+        data = Reference(ws_stats, min_col=11, min_row=3, max_row=9)
+        labels = Reference(ws_stats, min_col=10, min_row=4, max_row=9)
+        pie.add_data(data, titles_from_data=True)
+        pie.set_categories(labels)
+        pie.varyColors = True
+        pie.dataLabels = DataLabelList()
+        pie.dataLabels.showVal = True
+        pie.dataLabels.showPercent = True
+        pie.legend.position = 'r'
+        ws_stats.add_chart(pie, "A11")
+
+        ws_stats["I3"] = "Data Bantu Chart"
+        ws_stats["I3"].font = font_bold
+        ws_stats["I3"].fill = title_fill
+        ws_stats["I3"].alignment = alignment
+
+        metric_rows = [
+            (18, "Persentase Kehadiran", total_summary["Persentase Hadir"]),
+            (19, "Persentase Keterlambatan", round(((total_summary["T1"] + total_summary["T2"] + total_summary["T3"]) / max((total_summary["Hadir"] + total_summary["Izin"] + total_summary["T1"] + total_summary["T2"] + total_summary["T3"] + total_summary["-"]), 1)) * 100, 2)),
+        ]
+
+        for row_idx, label, value in metric_rows:
+            ws_stats[f"A{row_idx}"] = label
+            ws_stats[f"A{row_idx}"].font = font_bold
+            ws_stats[f"A{row_idx}"].alignment = wrapped_center
+            ws_stats[f"A{row_idx}"].fill = card_fill
+
+            ws_stats[f"B{row_idx}"] = f"{value}%"
+            ws_stats[f"B{row_idx}"].font = font_bold
+            ws_stats[f"B{row_idx}"].alignment = wrapped_center
+            ws_stats[f"B{row_idx}"].fill = accent_fill
+
+        for col_letter, width in {"A": 18, "B": 14, "C": 4, "D": 4, "E": 4, "F": 4, "G": 4, "H": 4, "I": 16, "J": 14, "K": 14}.items():
+            ws_stats.column_dimensions[col_letter].width = width
+
+        ws_stats.column_dimensions["I"].hidden = False
+        ws_stats.column_dimensions["J"].hidden = False
+        ws_stats.column_dimensions["K"].hidden = False
+
+        for row_idx in [1, 2, 4, 5, 7, 9, 18, 19]:
+            ws_stats.row_dimensions[row_idx].height = 24
+
+        ws_stats.row_dimensions[4].height = 32
+        ws_stats.row_dimensions[5].height = 32
+        ws_stats.row_dimensions[18].height = 28
+        ws_stats.row_dimensions[19].height = 28
 
     output.seek(0)
     response = HttpResponse(output.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')

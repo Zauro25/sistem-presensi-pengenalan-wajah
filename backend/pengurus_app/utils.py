@@ -99,3 +99,77 @@ def get_rekap_data(start, end, kelas=None):
             putri.append(row)
 
     return {"ok": True, "headers": headers, "putra": putra, "putri": putri}
+
+
+def build_rekap_statistics(rekap_data):
+    headers = rekap_data.get("headers", [])
+    sheet_rows = [
+        ("Putra", rekap_data.get("putra", [])),
+        ("Putri", rekap_data.get("putri", [])),
+    ]
+
+    def summarize_rows(rows):
+        counts = {"Hadir": 0, "Izin": 0, "T1": 0, "T2": 0, "T3": 0, "-": 0, "Kosong": 0}
+        total_santri = len(rows)
+        total_cells = total_santri * len(headers)
+
+        for row in rows:
+            for header in headers:
+                value = str(row.get(header["col_key"], "") or "").strip()
+                if value in counts:
+                    counts[value] += 1
+                else:
+                    counts["Kosong"] += 1
+
+        terisi = total_cells - counts["Kosong"]
+        hadir_rate = round((counts["Hadir"] / terisi) * 100, 2) if terisi else 0
+
+        return {
+            "Santri": total_santri,
+            "Kolom Jadwal": len(headers),
+            "Total Sel": total_cells,
+            "Terisi": terisi,
+            "Kosong": counts["Kosong"],
+            "Hadir": counts["Hadir"],
+            "Izin": counts["Izin"],
+            "T1": counts["T1"],
+            "T2": counts["T2"],
+            "T3": counts["T3"],
+            "-": counts["-"],
+            "Persentase Hadir": hadir_rate,
+        }
+
+    summary_rows = []
+    for sheet_name, rows in sheet_rows:
+        stats = summarize_rows(rows)
+        summary_rows.append({"Sheet": sheet_name, **stats})
+
+    total_stats = {
+        "Santri": sum(item["Santri"] for item in summary_rows),
+        "Kolom Jadwal": len(headers),
+        "Total Sel": sum(item["Total Sel"] for item in summary_rows),
+        "Terisi": sum(item["Terisi"] for item in summary_rows),
+        "Kosong": sum(item["Kosong"] for item in summary_rows),
+        "Hadir": sum(item["Hadir"] for item in summary_rows),
+        "Izin": sum(item["Izin"] for item in summary_rows),
+        "T1": sum(item["T1"] for item in summary_rows),
+        "T2": sum(item["T2"] for item in summary_rows),
+        "T3": sum(item["T3"] for item in summary_rows),
+        "-": sum(item["-"] for item in summary_rows),
+    }
+    total_stats["Persentase Hadir"] = round((total_stats["Hadir"] / total_stats["Terisi"]) * 100, 2) if total_stats["Terisi"] else 0
+    summary_rows.append({"Sheet": "Total", **total_stats})
+
+    unique_dates = sorted({header["tanggal"] for header in headers})
+    unique_sessions = sorted({header["sesi"] for header in headers}, key=_session_sort_key)
+
+    return {
+        "meta": {
+            "Tanggal Mulai": unique_dates[0] if unique_dates else "-",
+            "Tanggal Akhir": unique_dates[-1] if unique_dates else "-",
+            "Total Hari": len(unique_dates),
+            "Total Sesi": len(unique_sessions),
+            "Daftar Sesi": ", ".join(unique_sessions) if unique_sessions else "-",
+        },
+        "summary": summary_rows,
+    }
