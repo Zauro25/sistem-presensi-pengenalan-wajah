@@ -7,7 +7,11 @@ from sklearn.preprocessing import StandardScaler
 from skimage.feature import hog
 import cv2
 import os
+import joblib
+from django.conf import settings
 from .models import Santri
+
+MODEL_FILE = os.path.join(settings.MEDIA_ROOT, 'face_model.joblib')
 
 
 _MODEL_CACHE = {
@@ -41,6 +45,11 @@ def invalidate_face_model_cache():
     _MODEL_CACHE["samples"] = None
     _MODEL_CACHE["labels"] = None
     _MODEL_CACHE["profiles"] = None
+    try:
+        if os.path.exists(MODEL_FILE):
+            os.remove(MODEL_FILE)
+    except Exception:
+        pass
 
 
 def _build_cascade_candidates():
@@ -82,7 +91,6 @@ FACE_CASCADES = _load_face_cascades()
 
 
 def _to_location(x, y, w, h):
-    # Convert OpenCV rect (x, y, w, h) into (top, right, bottom, left)
     return (int(y), int(x + w), int(y + h), int(x))
 
 
@@ -94,9 +102,9 @@ def _detect_with_cascade(img_gray):
     for cascade in FACE_CASCADES:
         faces = cascade.detectMultiScale(
             img_gray,
-            scaleFactor=1.08,
-            minNeighbors=4,
-            minSize=(32, 32),
+            scaleFactor=1.05,
+            minNeighbors=3,
+            minSize=(28, 28),
             flags=cv2.CASCADE_SCALE_IMAGE,
         )
         if len(faces) == 0:
@@ -129,7 +137,6 @@ def _detect_with_cascade(img_gray):
 
 
 def detect_face_locations_robust(img_rgb):
-    # Multi-pass detection: native, equalized, and upscaled grayscale.
     gray = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2GRAY)
     gray_eq = cv2.equalizeHist(gray)
 
@@ -179,7 +186,7 @@ def decode_base64_image(data_url):
 def get_all_training_samples():
     samples = []
     labels = []
-    for s in Santri.objects.exclude(face_encoding__isnull=True):
+    for s in Santri.objects.filter(user__is_active=True).exclude(face_encoding__isnull=True):
         try:
             raw = s.face_encoding
             if isinstance(raw, list) and len(raw) > 0 and isinstance(raw[0], list):
@@ -230,9 +237,45 @@ def build_class_profiles(samples, labels):
     return profiles
 
 
+def _save_model_to_disk(model, scaler, samples, labels, profiles):
+    try:
+        artifact_dict = {
+            'model': model,
+            'scaler': scaler,
+            'samples': samples,
+            'labels': labels,
+            'profiles': profiles,
+        }
+        joblib.dump(artifact_dict, MODEL_FILE)
+    except Exception as e:
+        print(f"Warning: Could not save model to disk: {e}")
+
+
+def _load_model_from_disk():
+    if not os.path.exists(MODEL_FILE):
+        return None
+    try:
+        artifact_dict = joblib.load(MODEL_FILE)
+        return artifact_dict['model'], artifact_dict['scaler'], artifact_dict['samples'], artifact_dict['labels'], artifact_dict['profiles']
+    except Exception as e:
+        print(f"Warning: Could not load model from disk: {e}")
+        return None
+
+
 def get_trained_artifacts():
+
     if _MODEL_CACHE["model"] is not None:
         return _MODEL_CACHE["model"], _MODEL_CACHE["scaler"], _MODEL_CACHE["samples"], _MODEL_CACHE["labels"], _MODEL_CACHE["profiles"], None
+
+    disk_result = _load_model_from_disk()
+    if disk_result is not None:
+        model, scaler, samples, labels, profiles = disk_result
+        _MODEL_CACHE["model"] = model
+        _MODEL_CACHE["scaler"] = scaler
+        _MODEL_CACHE["samples"] = samples
+        _MODEL_CACHE["labels"] = labels
+        _MODEL_CACHE["profiles"] = profiles
+        return model, scaler, samples, labels, profiles, None
 
     samples, labels = get_all_training_samples()
     if not samples:
@@ -252,6 +295,8 @@ def get_trained_artifacts():
     _MODEL_CACHE["samples"] = samples
     _MODEL_CACHE["labels"] = labels
     _MODEL_CACHE["profiles"] = profiles
+    _save_model_to_disk(model, scaler, samples, labels, profiles)
+
     return model, scaler, samples, labels, profiles, None
 
 
@@ -266,7 +311,6 @@ def nearest_distance_by_class(samples, labels, query_enc):
 
 
 def compute_hybrid_confidence(svm_prob, near_dist, dist_gap):
-    # Convert distance signals to [0, 1] then blend with SVM probability.
     dist_score = np.clip((1.05 - float(near_dist)) / 0.50, 0.0, 1.0)
     gap_score = np.clip((float(dist_gap) - 0.005) / 0.14, 0.0, 1.0)
     prob_score = np.clip(float(svm_prob), 0.0, 1.0)
@@ -276,21 +320,23 @@ def compute_hybrid_confidence(svm_prob, near_dist, dist_gap):
 
 def calibrate_final_confidence(base_conf, near_dist, dist_gap):
     final_conf = float(base_conf)
-    if near_dist <= 0.50 and dist_gap >= 0.08:
-        final_conf = max(final_conf, 0.90)
-    elif near_dist <= 0.56 and dist_gap >= 0.06:
-        final_conf = max(final_conf, 0.84)
-    elif near_dist <= 0.62 and dist_gap >= 0.04:
-        final_conf = max(final_conf, 0.78)
-    elif near_dist <= 0.68 and dist_gap >= 0.03:
-        final_conf = max(final_conf, 0.72)
+    if near_dist <= 0.56 and dist_gap >= 0.06:  
+        final_conf = max(final_conf, 0.92)
+    elif near_dist <= 0.62 and dist_gap >= 0.05: 
+        final_conf = max(final_conf, 0.86)
+    elif near_dist <= 0.68 and dist_gap >= 0.03:  
+        final_conf = max(final_conf, 0.80)
+    elif near_dist <= 0.72 and dist_gap >= 0.02:  
+        final_conf = max(final_conf, 0.74)
+    elif near_dist <= 0.75 and dist_gap >= 0.015: 
+        final_conf = max(final_conf, 0.68)
 
-    # Stretch upper range so valid matches do not get stuck around 60-70.
-    stretched = np.clip(final_conf, 0.0, 1.0) ** 0.82
+    stretched = np.clip(final_conf, 0.0, 1.0) ** 0.95
     return float(np.clip(stretched, 0.0, 1.0))
 
 
 def profile_confidence(predicted_pk, query_enc, profiles):
+
     if not profiles or predicted_pk not in profiles:
         return 0.0, 0.0
 
@@ -314,7 +360,7 @@ def profile_confidence(predicted_pk, query_enc, profiles):
     gap_score = float(np.clip((second - pred_dist) / 0.25, 0.0, 1.0))
     return closeness, gap_score
 
-def predict_with_svm(model, scaler, face_enc, min_prob=0.58, min_margin=0.05):
+def predict_with_svm(model, scaler, face_enc, min_prob=0.52, min_margin=0.035):
     face_scaled = scaler.transform([face_enc])
     probs = model.predict_proba(face_scaled)[0]
     best_idx = int(np.argmax(probs))
@@ -339,7 +385,7 @@ def _clip_face_box(location, h, w):
     return (top, right, bottom, left)
 
 
-def _expand_face_box(location, h, w, pad_ratio=0.18, min_pad=8):
+def _expand_face_box(location, h, w, pad_ratio=0.12, min_pad=6):
     top, right, bottom, left = location
     box_h = max(1, bottom - top)
     box_w = max(1, right - left)
@@ -373,10 +419,8 @@ def _classify_hog_features(hog_features, location, min_prob, claimed_pk=None):
     if near_dist > 0.8:
         return None, "low_confidence", None
 
-    # When two identities are too close, treat as ambiguous instead of forcing a match.
     is_ambiguous_pair = np.isfinite(second_dist) and (dist_gap < 0.045 or relative_gap < 0.08)
 
-    # Allow disambiguation only when caller claims identity and that identity is still very close.
     if is_ambiguous_pair and claimed_pk is not None:
         claimed_dist = by_id_dist.get(int(claimed_pk))
         if claimed_dist is not None:
@@ -394,7 +438,8 @@ def _classify_hog_features(hog_features, location, min_prob, claimed_pk=None):
     predicted_pk, prob, margin = predict_with_svm(model, scaler, hog_features, min_prob=min_prob)
     hybrid_conf = compute_hybrid_confidence(prob, near_dist, dist_gap)
     if predicted_pk is None:
-        if (not is_ambiguous_pair) and near_dist <= 0.64 and dist_gap >= 0.05:
+        # Relax fallback thresholds to tolerate pose/lighting variation during presensi
+        if (not is_ambiguous_pair) and near_dist <= 0.68 and dist_gap >= 0.03:
             predicted_pk = near_id
             prob = max(float(hybrid_conf), 0.68)
         else:
@@ -410,15 +455,17 @@ def _classify_hog_features(hog_features, location, min_prob, claimed_pk=None):
     except Santri.DoesNotExist:
         return None, "not_found", None
 
+    if not santri.user or not santri.user.is_active:
+        return None, "not_found", None
+
     profile_close, profile_gap = profile_confidence(predicted_pk, hog_features, profiles)
     prof_blend = (0.7 * profile_close) + (0.3 * profile_gap)
     base_conf = (0.55 * max(float(prob), hybrid_conf)) + (0.45 * prof_blend)
     final_conf = calibrate_final_confidence(base_conf, near_dist, dist_gap)
 
-    # Final safety gates against similar-looking faces.
-    if is_ambiguous_pair and final_conf < 0.78:
+    if is_ambiguous_pair and final_conf < 0.65:  
         return None, "ambiguous_face", float(final_conf)
-    if final_conf < 0.55:
+    if final_conf < 0.40:  
         return None, "low_confidence", float(final_conf)
 
     return {
@@ -427,15 +474,36 @@ def _classify_hog_features(hog_features, location, min_prob, claimed_pk=None):
         "confidence": final_conf,
     }, "ok", final_conf
 
+def _apply_clahe_and_gamma(face_gray):
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    face_clahe = clahe.apply(face_gray)
+    
+    gamma = 0.95
+    inv_gamma = 1.0 / gamma
+    table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in range(256)]).astype(np.uint8)
+    face_gamma = cv2.LUT(face_clahe, table)
+    
+    return face_gamma
+
 def extract_hog_features(face_img, resize_dim=(128, 128)):
     face_resized = cv2.resize(face_img, resize_dim)
     if len(face_resized.shape) == 3:
         face_gray = cv2.cvtColor(face_resized, cv2.COLOR_RGB2GRAY)
     else:
         face_gray = face_resized
-    face_gray = cv2.equalizeHist(face_gray)
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+    face_gray = clahe.apply(face_gray)
+    
+    h_r, w_r = face_gray.shape[:2]
+    mask = np.zeros((h_r, w_r), dtype=np.uint8)
+    center = (w_r // 2, h_r // 2)
+    axes = (max(1, int(w_r * 0.40)), max(1, int(h_r * 0.50)))
+    cv2.ellipse(mask, center, axes, 0, 0, 360, 255, -1)
+    mask = cv2.GaussianBlur(mask, (15, 15), 0)
+    face_gray_masked = (face_gray.astype(np.float32) * (mask.astype(np.float32) / 255.0)).astype(np.uint8)
+
     hog_features = hog(
-        face_gray,
+        face_gray_masked,
         orientations=9,
         pixels_per_cell=(8, 8),
         cells_per_block=(2, 2),

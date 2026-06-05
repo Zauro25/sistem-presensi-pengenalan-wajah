@@ -283,7 +283,7 @@ export default function PengurusDashboard() {
           </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 text-center">
           {[
             {
               label: 'Total Santri',
@@ -322,29 +322,24 @@ export default function PengurusDashboard() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold" style={{ color: 'var(--foreground)' }}>Ringkasan Presensi Hari Ini</h2>
-              <p className="text-sm mt-1" style={{ color: 'color-mix(in oklab, var(--foreground) 70%, transparent)' }}>
-                Distribusi status presensi dari hasil rekap hari ini.
-              </p>
             </div>
-            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-primary text-white">
-              Belum/Tidak presensi: {loading ? '-' : stats.belumPresensiHariIni}
-            </span>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {statusPills.map((pill) => (
+                  <span key={pill.label} className={`px-3 py-1.5 rounded-full text-sm font-semibold ${pill.classes}`}>
+                    {pill.label}: {loading ? '-' : pill.value}
+                  </span>
+                ))}
+              </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            {statusPills.map((pill) => (
-              <span key={pill.label} className={`px-3 py-1.5 rounded-full text-sm font-semibold ${pill.classes}`}>
-                {pill.label}: {loading ? '-' : pill.value}
-              </span>
-            ))}
-          </div>
+
 
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="rounded-xl p-4 border border-gray-200 bg-gray-50">
+            <div className="rounded-xl p-4 border border-gray-200 bg-gray-50 text-center">
               <p className="text-sm text-gray-600">Izin Hari Ini</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">{loading ? '-' : stats.izinHariIni}</p>
             </div>
-            <div className="rounded-xl p-4 border border-gray-200 bg-gray-50">
+            <div className="rounded-xl p-4 border border-gray-200 bg-gray-50 text-center">
               <p className="text-sm text-gray-600">Persentase Kehadiran hari ini</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">{attendanceRate}%</p>
             </div>
@@ -406,10 +401,7 @@ export default function PengurusDashboard() {
         </div>
 
         <div className="rounded-2xl border shadow-sm p-6" style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)' }}>
-          <h2 className="text-xl font-bold" style={{ color: 'var(--foreground)' }}>Distribusi Kelas</h2>
-          <p className="text-sm mt-1" style={{ color: 'color-mix(in oklab, var(--foreground) 70%, transparent)' }}>
-            Kelas dengan jumlah santri terbanyak.
-          </p>
+          <h2 className="text-xl font-bold text-center" style={{ color: 'var(--foreground)' }}>Distribusi Kelas</h2>
 
           <div className="mt-4 space-y-3">
             {loading ? (

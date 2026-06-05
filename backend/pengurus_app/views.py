@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 from django.utils import timezone
 from .models import Santri, Presensi, SuratIzin, RegistrationCode
 from .serializers import SantriSerializer, SuratIzinSerializer, UserSerializer, RegisterSantriAccountSerializer
-from .face_utils import decode_base64_image, recognize_from_image_pil, recognize_many_from_image_pil, encode_face_from_image, invalidate_face_model_cache
+from .face_utils import decode_base64_image, recognize_from_image_pil, recognize_many_from_image_pil, encode_face_from_image, invalidate_face_model_cache, merge_encodings
 from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework import generics, status
@@ -146,7 +146,7 @@ def validasi_izin(request, izin_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_list_santri(request):
-    santris = Santri.objects.all().order_by('santri_id')
+    santris = Santri.objects.filter(user__is_active=True).select_related('user').order_by('santri_id')
     return Response({'ok': True, 'data': SantriSerializer(santris, many=True).data})
 
 
@@ -166,6 +166,7 @@ def api_search_santri_for_deactivation(request):
         )
 
     santris = Santri.objects.filter(
+        user__is_active=True,
         nama__icontains=nama,
         asal_daerah__icontains=asal_daerah
     ).order_by('nama', 'santri_id')
@@ -187,17 +188,15 @@ def api_deactivate_santri(request, santri_id):
     except Santri.DoesNotExist:
         return Response({'ok': False, 'message': 'Santri tidak ditemukan'}, status=404)
 
-    santri_name = santri.nama
     user = santri.user
     if user:
-        user.delete()
-    else:
-        santri.delete()
+        if user.is_active:
+            user.is_active = False
+            user.save(update_fields=['is_active'])
 
-    RegistrationCode.objects.filter(santri_name__iexact=santri_name, used=False).delete()
     invalidate_face_model_cache()
 
-    return Response({'ok': True, 'message': 'Santri berhasil dinonaktifkan dan dihapus dari database'})
+    return Response({'ok': True, 'message': 'Santri berhasil dinonaktifkan. Data dan riwayat presensi tetap tersimpan.'})
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -378,8 +377,34 @@ def api_santri_registrasi_wajah(request):
         if len(encodings) == 0:
             return Response({"error": "Wajah tidak ditemukan pada semua pose"}, status=400)
 
-        # Replace old face encoding with latest registration samples.
-        santri.face_encoding = encodings if len(encodings) > 1 else encodings[0]
+        # Accumulate encodings: if santri has existing encoding, merge with new ones
+        all_encodings = []
+        
+        # Add existing encoding(s) if present
+        if santri.face_encoding is not None:
+            existing = santri.face_encoding
+            # Handle both single encoding and array of encodings
+            if isinstance(existing, list):
+                if existing and isinstance(existing[0], list):
+                    # Array of encodings
+                    all_encodings.extend(existing)
+                else:
+                    # Single encoding as list
+                    all_encodings.append(existing)
+            else:
+                # Shouldn't happen but handle it
+                all_encodings.append(existing)
+        
+        # Add new encodings
+        all_encodings.extend(encodings)
+        
+        # Merge all encodings into single robust encoding
+        merged_encoding = merge_encodings(all_encodings)
+        
+        if merged_encoding is None:
+            return Response({"error": "Gagal merge encodings"}, status=500)
+        
+        santri.face_encoding = merged_encoding
         santri.save()
         invalidate_face_model_cache()
 
@@ -387,11 +412,12 @@ def api_santri_registrasi_wajah(request):
 
         return Response({
             "ok": True,
-            "message": f"Wajah {santri.nama} berhasil diregistrasi ({len(encodings)}/{len(sample_images)} pose).",
+            "message": f"Wajah {santri.nama} berhasil diregistrasi ({len(encodings)} pose baru, total {len(all_encodings)} training samples).",
             "nama": santri.nama,
             "captured": len(encodings),
             "total": len(sample_images),
             "failed": failed_samples,
+            "accumulated_samples": len(all_encodings),
             "location": {"top": top, "right": right, "bottom": bottom, "left": left}
         })
 
@@ -427,12 +453,29 @@ def api_santri_upload_foto(request):
         if hog_encoding is None:
             return Response({"error": "Wajah tidak terdeteksi, coba gunakan foto yang lebih jelas"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Replace old face encoding with latest uploaded photo encoding.
-        santri.face_encoding = hog_encoding
+        # Accumulate: merge new encoding with existing ones
+        all_encodings = [hog_encoding]
+        
+        if santri.face_encoding is not None:
+            existing = santri.face_encoding
+            if isinstance(existing, list):
+                if existing and isinstance(existing[0], list):
+                    all_encodings.extend(existing)
+                else:
+                    all_encodings.append(existing)
+            else:
+                all_encodings.append(existing)
+        
+        merged_encoding = merge_encodings(all_encodings)
+        
+        if merged_encoding is None:
+            return Response({"error": "Gagal merge encodings"}, status=500)
+        
+        santri.face_encoding = merged_encoding
         santri.save()
         invalidate_face_model_cache()
 
-        return Response({"success": True, "message": "Foto berhasil diupload & encoding disimpan"}, status=status.HTTP_200_OK)
+        return Response({"success": True, "message": f"Foto berhasil diupload & encoding diakumulasi (total training samples: {len(all_encodings)})"}, status=status.HTTP_200_OK)
 
     except Exception as e:
         return Response({"error": f"Error proses wajah: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -495,12 +538,22 @@ def api_recognize_and_attend(request):
             except (TypeError, ValueError):
                 return Response({"ok": False, "message": "claimed_santri_id harus berupa angka"}, status=400)
 
+            if not Santri.objects.filter(id=claimed_santri_id, user__is_active=True).exists():
+                return Response({
+                    "ok": False,
+                    "message": "Profil santri tidak ditemukan",
+                    "info": "not_found",
+                }, status=404)
+
         if claimed_santri_id is None and claimed_full_name_raw not in (None, ""):
             claimed_full_name = str(claimed_full_name_raw).strip()
             if not claimed_full_name:
                 return Response({"ok": False, "message": "Nama lengkap tidak boleh kosong", "info": "invalid_claimed_name"}, status=400)
 
-            matching_santri = Santri.objects.filter(nama__iexact=claimed_full_name).order_by('id')
+            matching_santri = Santri.objects.filter(
+                user__is_active=True,
+                nama__iexact=claimed_full_name,
+            ).order_by('id')
             match_count = matching_santri.count()
 
             if match_count == 0:
@@ -869,6 +922,8 @@ def api_verify_santri_name(request):
     santri_name = request.data.get('santri_name', '').strip()
     if not santri_name:
         return Response({'ok': False, 'message': 'Nama santri harus diisi'}, status=400)
+
+    normalized_name = ' '.join(santri_name.split())
     
     excel_path = os.path.join(settings.MEDIA_ROOT, 'data_santri', 'data_santri.xlsx')
     if not os.path.exists(excel_path):
@@ -900,9 +955,20 @@ def api_verify_santri_name(request):
                 'message': f'Nama "{santri_name}" tidak ditemukan dalam daftar santri resmi',
                 'verified': False
             })
+
+        existing_code = RegistrationCode.objects.filter(
+            santri_name__iexact=normalized_name
+        ).order_by('-created_at').first()
+
+        if existing_code:
+            return Response({
+                'ok': False,
+                'verified': False,
+                'message': f'Nama "{santri_name}" sudah diregistrasi',
+            }, status=409)
         
         reg_code = RegistrationCode.objects.create(
-            santri_name=santri_name,
+            santri_name=normalized_name,
             generated_by=request.user
         )
         

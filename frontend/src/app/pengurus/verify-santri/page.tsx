@@ -2,6 +2,15 @@
 
 import { useState } from 'react';
 import { api } from '@/lib/api';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export default function VerifySantriPage() {
   const [santriName, setSantriName] = useState('');
@@ -10,6 +19,8 @@ export default function VerifySantriPage() {
   const [registrationCode, setRegistrationCode] = useState(null);
   const [codes, setCodes] = useState([]);
   const [showCodes, setShowCodes] = useState(false);
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
+  const [duplicateDialogMessage, setDuplicateDialogMessage] = useState('');
 
   const handleVerify = async (e) => {
     e.preventDefault();
@@ -31,7 +42,13 @@ export default function VerifySantriPage() {
         setMessage({ type: 'error', text: response.message });
       }
     } catch (error) {
-      setMessage({ type: 'error', text: error.message || 'Verifikasi gagal' });
+      const errorMessage = error?.message || 'Verifikasi gagal';
+      setMessage({ type: 'error', text: errorMessage });
+
+      if (error?.status === 409 || /sudah diregistrasi/i.test(errorMessage)) {
+        setDuplicateDialogMessage(errorMessage);
+        setDuplicateDialogOpen(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -65,6 +82,22 @@ export default function VerifySantriPage() {
 
   return (
     <div>
+      <AlertDialog open={duplicateDialogOpen} onOpenChange={setDuplicateDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Nama sudah diregistrasi</AlertDialogTitle>
+            <AlertDialogDescription>
+              {duplicateDialogMessage || 'Nama santri tersebut sudah pernah dibuatkan kode registrasinya.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setDuplicateDialogOpen(false)}>
+              Tutup
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-white text-center">Verifikasi Data Santri</h1>
       </div>
@@ -107,7 +140,7 @@ export default function VerifySantriPage() {
       </div>
 
       {registrationCode && (
-        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-lg shadow-lg p-6 mb-8">
+        <div className="bg-linear-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-lg shadow-lg p-6 mb-8">
           <div className="flex items-center mb-4">
             <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
               <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

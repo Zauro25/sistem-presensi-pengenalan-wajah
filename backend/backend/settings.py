@@ -9,7 +9,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-secret-key")
 
-DEBUG = os.getenv("DEBUG", "True") == "True"
+DEBUG = os.getenv("DEBUG", "True") == "False"
 
 ALLOWED_HOSTS = ["*"]
 
@@ -29,7 +29,7 @@ INSTALLED_APPS = [
 ]
 
 CSRF_TRUSTED_ORIGINS = [
-    "https://8d68-182-253-128-4.ngrok-free.app",
+    "https://2d85-114-124-142-125.ngrok-free.app",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
@@ -139,7 +139,7 @@ CORS_ALLOW_HEADERS = [
 
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
-    "https://8d68-182-253-128-4.ngrok-free.app",
+    "https://2d85-114-124-142-125.ngrok-free.app",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]

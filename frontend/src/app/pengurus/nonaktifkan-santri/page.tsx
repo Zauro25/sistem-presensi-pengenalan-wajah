@@ -171,7 +171,7 @@ export default function NonaktifkanSantriPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Konfirmasi Nonaktifkan</AlertDialogTitle>
             <AlertDialogDescription>
-              Apakah anda yakin ingin menonaktifkan santri?
+              Apakah anda yakin ingin menonaktifkan santri? Akun login akan dinonaktifkan, tetapi data tetap tersimpan.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -125,11 +125,11 @@ function StatDonutChart({ stats }) {
           </svg>
           <div className="absolute text-center">
             <div className="text-3xl font-bold text-gray-900">{total}</div>
-            <div className="text-xs uppercase tracking-[0.2em] text-gray-500">Sel</div>
+            <div className="text-xs uppercase tracking-[0.2em] text-gray-500">Data</div>
           </div>
         </div>
         <div className="mt-4 text-center text-sm text-gray-500">
-          Distribusi status presensi dari seluruh data terisi.
+          Distribusi status presensi dari seluruh data presensi pada periode tersebut.
         </div>
       </div>
 
@@ -318,7 +318,7 @@ export default function RekapPage() {
 
       {rekapData && (
         <div className="space-y-6">
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white rounded-lg shadow p-6 text-center">
             <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between mb-4">
               <div>
                 <h2 className="text-xl font-semibold text-gray-900">Statistik Rekapitulasi</h2>
@@ -332,21 +332,22 @@ export default function RekapPage() {
               <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
                 <p className="text-sm text-gray-500">Total Santri</p>
                 <p className="mt-1 text-2xl font-bold text-gray-900">{recapStats.total.Santri}</p>
-                <p className="text-xs text-gray-500 mt-1">Putra {recapStats.putra.Santri} • Putri {recapStats.putri.Santri}</p>
+                <p className="text-xs text-gray-500 mt-1">{recapStats.putra.Santri} Santri Putra</p>
+                <p className="text-xs text-gray-500">{recapStats.putri.Santri} Santri Putri</p>
               </div>
               <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
                 <p className="text-sm text-gray-500">Persentase Kehadiran</p>
                 <p className="mt-1 text-2xl font-bold text-gray-900">{recapStats.total.PresentaseHadir}%</p>
-                <p className="text-xs text-gray-500 mt-1">Dari seluruh sel yang terisi</p>
+                <p className="text-xs text-gray-500 mt-1">Dari seluruh data presensi pada periode tersebut</p>
               </div>
               <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
                 <p className="text-sm text-gray-500">Persentase Keterlambatan</p>
                 <p className="mt-1 text-2xl font-bold text-gray-900">{recapStats.total.PresentaseTelat}%</p>
-                <p className="text-xs text-gray-500 mt-1">T1 + T2 + T3 dari seluruh sel yang terisi</p>
+                <p className="text-xs text-gray-500 mt-1">T1 + T2 + T3 dari seluruh data presensi pada periode tersebut</p>
               </div>
             </div>
 
-            <StatDonutChart stats={recapStats.total} />
+            <StatDonutChart stats={recapStats.total}/>
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
